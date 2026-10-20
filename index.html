@@ -88,7 +88,13 @@ button:disabled{opacity:.45;cursor:default}
 .metrics{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}
 .metric{display:flex;flex-direction:column}
 .metric b{font-family:var(--f-num);font-size:20px;font-weight:600}
-.metric span{font-size:12px;color:var(--muted)}
+.metric span{font-size:12px;color:var(--muted);line-height:1.4}
+.metric b small{font-size:12px;font-weight:500;color:var(--muted);margin-left:2px}
+.grade{display:inline-block;font-size:11px;font-weight:700;padding:1px 7px;border-radius:999px;margin-top:3px;width:max-content}
+.g-good{background:color-mix(in srgb,var(--good) 16%,transparent);color:var(--good)}
+.g-mid{background:color-mix(in srgb,var(--warn) 18%,transparent);color:var(--warn)}
+.g-low{background:color-mix(in srgb,var(--bad) 14%,transparent);color:var(--bad)}
+.scale{display:flex;gap:10px;flex-wrap:wrap;font-size:12px;color:var(--muted);align-items:center}
 .tip{font-size:14px;background:var(--bg);border-radius:10px;padding:10px 12px}
 .vowelbtns{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:6px}
 .vowelbtns button{font:inherit;font-size:18px;font-weight:700;padding:10px 0;border-radius:10px;border:1px solid var(--line);background:var(--bg);color:var(--ink);cursor:pointer}
@@ -105,6 +111,7 @@ button:disabled{opacity:.45;cursor:default}
 .dayrow{display:grid;grid-template-columns:96px repeat(4,minmax(0,1fr));gap:6px;padding:8px 0;border-bottom:1px solid var(--line);font-size:13px;align-items:center}
 .dayrow.head{color:var(--muted);font-size:11px;letter-spacing:.04em}
 .dayrow .num{text-align:right}
+.dayrow > span:first-child{text-align:left}
 footer{font-size:12px;color:var(--muted)}
 @media (prefers-reduced-motion: reduce){*{transition:none!important}}
 </style>
@@ -123,12 +130,13 @@ footer{font-size:12px;color:var(--muted)}
         <circle cx="50" cy="50" r="42" fill="none" stroke="var(--line)" stroke-width="9"/>
         <circle id="ringArc" cx="50" cy="50" r="42" fill="none" stroke="var(--accent)" stroke-width="9" stroke-linecap="round" stroke-dasharray="0 264"/>
       </svg>
-      <div class="val"><b id="todayScore">–</b><span>今日</span></div>
+      <div class="val"><b id="todayScore">–</b><span>/100点</span></div>
     </div>
     <div class="sumtext">
       <p><b id="streak" class="num">0</b> 日連続　<span class="muted small" id="doneCount">0 / 4 完了</span></p>
       <div class="week" id="week"></div>
       <p class="small muted" id="sumTip">上から順に進めると約5分です。</p>
+      <div class="scale"><span>スコアは100点満点</span><span class="grade g-good">70〜 よい</span><span class="grade g-mid">40〜 ふつう</span><span class="grade g-low">〜39 伸びしろ</span></div>
     </div>
   </section>
 
@@ -182,7 +190,7 @@ footer{font-size:12px;color:var(--muted)}
 
   <section id="view-log" hidden style="display:flex;flex-direction:column;gap:14px">
     <div class="chartbox">
-      <h2>スコアの推移</h2>
+      <h2>スコアの推移 <span class="small muted">（100点満点）</span></h2>
       <div class="legend"><span><i style="background:var(--accent)"></i>総合</span><span><i style="background:var(--good)"></i>息</span><span><i style="background:var(--ochre)"></i>鼻つまみ</span><span><i style="background:var(--muted)"></i>母音</span></div>
       <div id="chartScore"></div>
     </div>
@@ -352,6 +360,18 @@ function lpc(fr,p){const r=new Float64Array(p+1); for(let k=0;k<=p;k++){let s=0;
   const a=new Float64Array(p+1); a[0]=1; let e=r[0];
   for(let i=1;i<=p;i++){let acc=r[i]; for(let j=1;j<i;j++) acc+=a[j]*r[i-j]; const k=-acc/e; const tmp=a.slice(); for(let j=1;j<i;j++) a[j]=tmp[j]+k*tmp[i-j]; a[i]=k; e*=(1-k*k); if(e<=0) return null;}
   return a;}
+/* roots of z^p + a1 z^(p-1) + ... + ap (Durand-Kerner) */
+function polyRoots(a){
+  const n=a.length-1; const z=[]; for(let k=0;k<n;k++){const t=2*Math.PI*k/n+0.4; z.push([0.9*Math.cos(t),0.9*Math.sin(t)]);}
+  const ev=(re,im)=>{let pr=1,pi=0; for(let k=1;k<=n;k++){const r=pr*re-pi*im+a[k], i=pr*im+pi*re; pr=r; pi=i;} return [pr,pi];};
+  for(let it=0;it<200;it++){let moved=0;
+    for(let i=0;i<n;i++){const [zr,zi]=z[i]; let [nr,ni]=ev(zr,zi); let dr=1,di=0;
+      for(let j=0;j<n;j++){if(j===i) continue; const xr=zr-z[j][0], xi=zi-z[j][1]; const r=dr*xr-di*xi, q=dr*xi+di*xr; dr=r; di=q;}
+      const den=dr*dr+di*di||1e-30; const qr=(nr*dr+ni*di)/den, qi=(ni*dr-nr*di)/den;
+      z[i]=[zr-qr,zi-qi]; moved=Math.max(moved,Math.abs(qr)+Math.abs(qi));}
+    if(moved<1e-10) break;}
+  return z;
+}
 function formantsOf(x,sr){
   const {y,sr:s}=decimate(x,sr,11025);
   const pe=new Float32Array(y.length); for(let i=1;i<y.length;i++) pe[i]=y[i]-0.97*y[i-1];
@@ -360,20 +380,18 @@ function formantsOf(x,sr){
   const mx=Math.max(...rms,0); if(mx<0.003) return null;
   const win=new Float32Array(N); for(let j=0;j<N;j++) win[j]=0.54-0.46*Math.cos(2*Math.PI*j/(N-1));
   const F1=[],F2=[];
-  const freqs=[]; for(let f=100;f<=3600;f+=10) freqs.push(f);
   rms.forEach((v,fi)=>{
     if(v<mx*0.35) return;
     const st=fi*H; const fr=new Float32Array(N); for(let j=0;j<N;j++) fr[j]=pe[st+j]*win[j];
     const a=lpc(fr,p); if(!a) return;
-    const env=freqs.map(f=>{const w=2*Math.PI*f/s; let re=0,im=0; for(let k=0;k<=p;k++){re+=a[k]*Math.cos(w*k); im-=a[k]*Math.sin(w*k);} return -10*Math.log10(re*re+im*im+1e-12);});
-    const pk=[]; for(let i=1;i<env.length-1;i++) if(env[i]>env[i-1]&&env[i]>=env[i+1]) pk.push(freqs[i]);
-    const f1=pk.find(f=>f>=200&&f<=1150); if(!f1) return;
-    const f2=pk.find(f=>f>f1+150&&f<=3200); if(!f2) return;
-    F1.push(f1); F2.push(f2);
+    const fm=polyRoots(a).filter(([re,im])=>im>0).map(([re,im])=>{const r=Math.hypot(re,im); return [Math.atan2(im,re)*s/(2*Math.PI), -s/Math.PI*Math.log(r)];})
+      .filter(([f,bw])=>f>=200&&f<=3500&&bw>0&&bw<500).map(x=>x[0]).sort((p,q)=>p-q);
+    if(fm.length<2||fm[0]>1150) return;
+    F1.push(fm[0]); F2.push(fm[1]);
   });
   if(F1.length<3) return null;
   const med=a=>{const b=[...a].sort((p,q)=>p-q); return b[Math.floor(b.length/2)];};
-  return [med(F1),med(F2)];
+  return [Math.round(med(F1)),Math.round(med(F2))];
 }
 function fft(re,im){const n=re.length; for(let i=1,j=0;i<n;i++){let b=n>>1; for(;j&b;b>>=1) j^=b; j^=b; if(i<j){[re[i],re[j]]=[re[j],re[i]];[im[i],im[j]]=[im[j],im[i]];}}
   for(let len=2;len<=n;len<<=1){const ang=-2*Math.PI/len; const wr=Math.cos(ang),wi=Math.sin(ang);
@@ -464,26 +482,31 @@ function vowelTip(v){
   const t=[];
   if(v.a&&v.i&&v.a[0]/v.i[0]<2.0) t.push('「あ」の口の開きが小さめです。顎を楽に下げる範囲で縦に開きましょう。');
   if(v.i&&v.u&&v.i[1]/v.u[1]<1.6) t.push('「い」で舌が前に来きっていません。舌先を下の前歯の裏に当てたまま発声しましょう。');
-  if(!t.length&&vowelArea(v)) t.push('母音ごとの差がしっかり出ています。');
+  const odd=[]; if(v.o&&v.a&&v.o[1]>v.a[1]+250) odd.push('お'); if(v.i&&v.i[1]<1600) odd.push('い'); if(v.u&&v.u[1]>2000) odd.push('う');
+  if(odd.length) t.unshift('「'+odd.join('」「')+'」がうまく測れていない可能性があります。ボタンを押してもう一度録り直してください。');
+  const ar=vowelArea(v);
+  if(!t.length&&ar){ if(ar/3500>=70) t.push('母音ごとの差がしっかり出ています。'); else t.push('母音ごとの差が小さめです。「あ」は縦に、「い」は口角を横に、「う」「お」は唇を前に、と形の違いを大げさにしてみましょう。'); }
   return t.join(' ');
 }
 function showMsg(id,msg){const o=$(id); o.hidden=false; o.innerHTML=''; const p=document.createElement('p'); p.className='tip'; p.textContent=msg; o.appendChild(p);}
 
 /* ---------- render ---------- */
 function metricHTML(items){return '<div class="metrics">'+items.map(([v,l])=>`<div class="metric"><b>${v}</b><span>${l}</span></div>`).join('')+'</div>';}
+function grade(sc){return sc>=70?['よい','g-good','var(--good)']:sc>=40?['ふつう','g-mid','var(--warn)']:['伸びしろ','g-low','var(--bad)'];}
+function scoreCell(sc){const g=grade(sc); return [`${sc}<small>/100</small>`,`スコア<br><span class="grade ${g[1]}">${g[0]}</span>`];}
 function renderToday(){
   const d=store.days[todayKey()]||{};
   const set=(c,on)=>{$(c).textContent=on?'済':'未'; $(c).classList.toggle('ok',!!on);};
   set('c-breath',d.breath); set('c-yawn',d.yawn); set('c-nasal',d.nasal); set('c-vowel',d.vowel&&d.vowel.area);
   $('d-breath').classList.toggle('done',!!d.breath); $('d-yawn').classList.toggle('done',!!d.yawn);
   $('d-nasal').classList.toggle('done',!!d.nasal); $('d-vowel').classList.toggle('done',!!(d.vowel&&d.vowel.area));
-  if(d.breath){const o=$('o-breath'); o.hidden=false; o.innerHTML=metricHTML([[d.breath.sec+'<small>s</small>','吐けた時間'],[d.breath.stab+'%','安定度'],[d.breath.score,'スコア']])+'<p class="tip"></p>'; o.querySelector('.tip').textContent=breathTip(d.breath);}
-  if(d.nasal){const o=$('o-nasal'); o.hidden=false; o.innerHTML=metricHTML([[d.nasal.diff+'<small>dB</small>','2回の差'],[d.nasal.score,'スコア'],['','']])+'<p class="tip"></p>'; o.querySelector('.tip').textContent=nasalTip(d.nasal);}
+  if(d.breath){const o=$('o-breath'); o.hidden=false; o.innerHTML=metricHTML([[d.breath.sec+'<small>秒</small>','吐けた時間<br>目標 30秒'],[d.breath.stab+'<small>%</small>','息の安定度<br>目標 80%以上'],scoreCell(d.breath.score)])+'<p class="tip"></p>'; o.querySelector('.tip').textContent=breathTip(d.breath);}
+  if(d.nasal){const o=$('o-nasal'); o.hidden=false; o.innerHTML=metricHTML([[d.nasal.diff+'<small>dB</small>','2回の音の差<br>小さいほど良い（2dB以下が目安）'],scoreCell(d.nasal.score),['','']])+'<p class="tip"></p>'; o.querySelector('.tip').textContent=nasalTip(d.nasal);}
   if(d.vowel&&d.vowel.v){
     const o=$('o-vowel'); o.hidden=false; const v=d.vowel.v;
     VOWELS.forEach(([k])=>$('v-'+k).classList.toggle('got',!!v[k]));
     const first=firstVowel();
-    o.innerHTML=(d.vowel.area?metricHTML([[Math.round(d.vowel.area/10000),'広がり'],[d.vowel.score,'スコア'],[v.a?v.a[0]:'–','「あ」の開き(F1)']]):'<p class="small muted">5つ全部録ると広がりを計算します。</p>')+'<div class="vmap"></div><p class="tip"></p>';
+    o.innerHTML=(d.vowel.area?metricHTML([[v.a?v.a[0]+'<small>Hz</small>':'–','「あ」の口の開き<br>大きいほど開いている'],[v.i&&v.u?(v.i[1]-v.u[1])+'<small>Hz</small>':'–','「い」と「う」の舌の差<br>大きいほど舌がよく動く'],scoreCell(d.vowel.score)]):'<p class="small muted">5つ全部録ると広がりを計算します。</p>')+'<div class="vmap"></div><p class="tip"></p>';
     o.querySelector('.vmap').innerHTML=vowelSVG(v,first&&first.date!==todayKey()?first.vowel.v:null);
     const tip=vowelTip(v); const tp=o.querySelector('.tip'); if(tip) tp.textContent=tip; else tp.remove();
   }
@@ -491,6 +514,7 @@ function renderToday(){
   $('doneCount').textContent=done+' / 4 完了';
   const t=d.total; $('todayScore').textContent=t==null?'–':t;
   $('ringArc').setAttribute('stroke-dasharray',((t||0)/100*264).toFixed(1)+' 264');
+  $('ringArc').setAttribute('stroke',t==null?'var(--accent)':grade(t)[2]);
   $('sumTip').textContent=done===4?'今日のメニューは完了です。おつかれさまでした。':'上から順に進めると約5分です。';
 }
 function sortedDays(){return Object.values(store.days).filter(d=>d.total!=null||d.yawn).sort((a,b)=>a.date<b.date?-1:1);}
@@ -520,8 +544,8 @@ function vowelSVG(v,prev){
   g+=`<text x="${L+4}" y="${T+10}" font-size="10" fill="var(--muted)">← 舌が前</text><text x="${W-R-4}" y="${T+10}" font-size="10" fill="var(--muted)" text-anchor="end">舌が奥 →</text><text x="${L+4}" y="${H-B-6}" font-size="10" fill="var(--muted)">↓ 口が開く</text>`;
   const order=['i','e','a','o','u']; const kana={a:'あ',i:'い',u:'う',e:'え',o:'お'};
   const poly=(vv,stroke,dash,fill)=>{const ps=order.filter(k=>vv[k]).map(k=>fx(clamp(vv[k][1],600,2800))+','+fy(clamp(vv[k][0],200,1100))); if(ps.length<3) return ''; return `<polygon points="${ps.join(' ')}" fill="${fill}" stroke="${stroke}" stroke-width="2" ${dash?'stroke-dasharray="4 4"':''} stroke-linejoin="round"/>`;};
-  if(prev) g+=poly(prev,'var(--muted)',true,'none');
   g+=poly(v,'var(--ochre)',false,'var(--ochre-soft)');
+  if(prev) g+=poly(prev,'var(--muted)',true,'none');
   order.forEach(k=>{if(!v[k])return; const cx=fx(clamp(v[k][1],600,2800)), cy=fy(clamp(v[k][0],200,1100)); g+=`<circle cx="${cx}" cy="${cy}" r="4" fill="var(--ochre)"/><text x="${cx}" y="${cy-8}" text-anchor="middle" font-size="13" font-weight="700" fill="var(--ink)">${kana[k]}</text>`;});
   return `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="母音マップ">${g}</svg>`;
 }
