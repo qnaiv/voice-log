@@ -261,13 +261,20 @@ async function ensureMic(){
     return false;
   }
 }
+/* hand the mic back right after each take so other apps (voice input etc.) can use it */
+function releaseMic(){
+  if(stream){stream.getTracks().forEach(t=>t.stop()); stream=null;}
+  if(ctx&&ctx.state==='running') ctx.suspend().catch(()=>{});
+}
+document.addEventListener('visibilitychange',()=>{if(document.hidden){if(active) active.stop(); releaseMic();}});
+window.addEventListener('pagehide',()=>{if(active) active.stop(); releaseMic();});
 /* record live audio. opts: maxSec, autoStop (stop after silence once sound started), onTick(level,sec) */
 function recordMic(opts){
   const c=getCtx(); const src=c.createMediaStreamSource(stream);
   const proc=c.createScriptProcessor(4096,1,1); const chunks=[]; const sr=c.sampleRate;
   let total=0, started=false, silent=0, noise=null, noiseAcc=[], stopped=false;
   return new Promise(res=>{
-    const finish=()=>{if(stopped)return; stopped=true; proc.disconnect(); src.disconnect(); active=null;
+    const finish=()=>{if(stopped)return; stopped=true; proc.disconnect(); src.disconnect(); active=null; releaseMic();
       const x=new Float32Array(total); let o=0; chunks.forEach(ch=>{x.set(ch,o);o+=ch.length}); res({x,sr});};
     active={stop:finish};
     proc.onaudioprocess=e=>{
