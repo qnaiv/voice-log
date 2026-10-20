@@ -143,7 +143,7 @@ footer{font-size:12px;color:var(--muted)}
     <!-- 1 breath -->
     <article class="drill" id="d-breath">
       <div class="drill-head"><div class="step">1</div>
-        <div class="t"><h3>ロングブレス</h3><p class="how">鼻から吸って、<b>「スーー」</b>と細く一定に吐き切る。息が止まると自動で終了します。</p></div>
+        <div class="t"><h3>ロングブレス</h3><p class="how">押したら一瞬静かにして、「どうぞ」が出たら鼻から吸って<b>「スーー」</b>と細く一定に吐き切る。息が止まると自動で終了します。</p></div>
         <span class="chip" id="c-breath">未</span></div>
       <div class="row"><button class="rec" id="r-breath"><span class="dot"></span><span>計測する</span></button><div class="meter"><i id="m-breath"></i></div><span class="timer" id="t-breath">0.0s</span></div>
       <div class="result" id="o-breath" hidden></div>
@@ -272,19 +272,26 @@ window.addEventListener('pagehide',()=>{if(active) active.stop(); releaseMic();}
 function recordMic(opts){
   const c=getCtx(); const src=c.createMediaStreamSource(stream);
   const proc=c.createScriptProcessor(4096,1,1); const chunks=[]; const sr=c.sampleRate;
-  let total=0, started=false, silent=0, noise=null, noiseAcc=[], stopped=false;
+  let total=0, started=false, silent=0, noise=null, noiseAcc=[], stopped=false, prev=0, onSec=0;
+  const calib=opts.calib||0.35;
   return new Promise(res=>{
     const finish=()=>{if(stopped)return; stopped=true; proc.disconnect(); src.disconnect(); active=null; releaseMic();
-      const x=new Float32Array(total); let o=0; chunks.forEach(ch=>{x.set(ch,o);o+=ch.length}); res({x,sr});};
+      const x=new Float32Array(total); let o=0; chunks.forEach(ch=>{x.set(ch,o);o+=ch.length}); res({x,sr,noise,calib});};
     active={stop:finish};
     proc.onaudioprocess=e=>{
       const d=e.inputBuffer.getChannelData(0); const cp=new Float32Array(d); chunks.push(cp); total+=cp.length;
-      let s=0; for(let i=0;i<cp.length;i++) s+=cp[i]*cp[i]; const rms=Math.sqrt(s/cp.length);
+      let s=0;
+      if(opts.hf){for(let i=0;i<cp.length;i++){const v=cp[i]-prev; prev=cp[i]; s+=v*v;}}
+      else{for(let i=0;i<cp.length;i++) s+=cp[i]*cp[i];}
+      const rms=Math.sqrt(s/cp.length);
       const sec=total/sr;
-      if(sec<0.35){noiseAcc.push(rms)} else if(noise===null){noise=Math.min(...noiseAcc,rms)}
-      const thr=Math.max(0.004,(noise||0.002)*3);
-      if(opts.autoStop&&noise!==null){ if(rms>thr){started=true;silent=0} else if(started){silent+=cp.length/sr; if(silent>1.4&&sec>2) finish();} }
-      opts.onTick&&opts.onTick(clamp(rms*12,0,1),sec);
+      if(sec<=calib){noiseAcc.push(rms)} else if(noise===null){const q=[...noiseAcc].sort((a,b)=>a-b); noise=q[Math.floor(q.length/2)]||rms;}
+      const thr=opts.hf?Math.max((noise||1e-4)*2,1e-4):Math.max(0.004,(noise||0.002)*3);
+      const on=noise!==null&&rms>thr;
+      if(on) onSec+=cp.length/sr;
+      if(opts.autoStop&&noise!==null){ if(on){started=true;silent=0} else if(started){silent+=cp.length/sr; if(silent>1.5&&onSec>1) finish();} }
+      const db=20*Math.log10(rms+1e-9); const lv=clamp((db+75)/55,0,1);
+      opts.onTick&&opts.onTick(lv,sec,{phase:noise===null?'calib':(on?'on':'wait'),onSec});
       if(sec>=opts.maxSec) finish();
     };
     src.connect(proc); proc.connect(c.destination);
@@ -314,19 +321,23 @@ async function capture(btn,opts,meterEl,timerEl,labelLive){
     try{return await recordFile();}catch(e){return null;}
   }
   btn.classList.add('live'); if(label) label.textContent=labelLive||'止める';
-  const out=await recordMic({...opts,onTick:(lv,sec)=>{meterEl&&(meterEl.style.width=(lv*100)+'%'); if(timerEl) timerEl.textContent=(opts.countdown?Math.max(0,opts.maxSec-sec):sec).toFixed(1)+'s';}});
+  const out=await recordMic({...opts,onTick:(lv,sec,st)=>{meterEl&&(meterEl.style.width=(lv*100)+'%');
+    if(opts.tick){opts.tick(lv,sec,st);return;}
+    if(timerEl) timerEl.textContent=(opts.countdown?Math.max(0,opts.maxSec-sec):sec).toFixed(1)+'s';}});
   btn.classList.remove('live'); if(label) label.textContent=orig; if(meterEl) meterEl.style.width='0';
   return out;
 }
 
 /* ---------- analysis ---------- */
 function frameRms(x,sr,win){const n=Math.max(1,Math.round(sr*win)); const out=[]; for(let i=0;i+n<=x.length;i+=n){let s=0; for(let j=0;j<n;j++) s+=x[i+j]*x[i+j]; out.push(Math.sqrt(s/n));} return out;}
-function analyzeBreath(x,sr){
-  const r=frameRms(x,sr,0.02); if(!r.length) return null;
-  const sorted=[...r].sort((a,b)=>a-b); const noise=sorted[Math.floor(sorted.length*0.1)]; const peak=sorted[Math.floor(sorted.length*0.98)];
-  const thr=Math.max(peak*0.18,noise*2.5,0.002);
+function analyzeBreath(x,sr,calNoise){
+  const d=new Float32Array(x.length); for(let i=1;i<x.length;i++) d[i]=x[i]-x[i-1];
+  const r=frameRms(d,sr,0.02); if(!r.length) return null;
+  const sorted=[...r].sort((a,b)=>a-b); const peak=sorted[Math.floor(sorted.length*0.98)];
+  const noise=calNoise||sorted[Math.floor(sorted.length*0.1)];
+  const thr=Math.max(noise*2,peak*0.08,1e-4);
   let best=[0,-1],cur=null,gap=0;
-  r.forEach((v,i)=>{ if(v>thr){ if(!cur) cur=[i,i]; cur[1]=i; gap=0; } else if(cur){ gap++; if(gap>8){ if(cur[1]-cur[0]>best[1]-best[0]) best=cur; cur=null; gap=0;} } });
+  r.forEach((v,i)=>{ if(v>thr){ if(!cur) cur=[i,i]; cur[1]=i; gap=0; } else if(cur){ gap++; if(gap>15){ if(cur[1]-cur[0]>best[1]-best[0]) best=cur; cur=null; gap=0;} } });
   if(cur&&cur[1]-cur[0]>best[1]-best[0]) best=cur;
   if(best[1]<0) return null;
   const sec=(best[1]-best[0]+1)*0.02;
@@ -385,9 +396,14 @@ function vowelArea(v){const order=['i','e','a','o','u']; if(!order.every(k=>v[k]
 /* ---------- drills ---------- */
 $('r-breath').onclick=async()=>{
   const btn=$('r-breath');
-  const out=await capture(btn,{maxSec:60,autoStop:true},$('m-breath'),$('t-breath'),'止める');
+  const tEl=$('t-breath');
+  const out=await capture(btn,{maxSec:90,autoStop:true,hf:true,calib:0.8,tick:(lv,sec,st)=>{
+    tEl.textContent=st.phase==='calib'?'静かに…':st.phase==='wait'&&st.onSec<0.2?'どうぞ':st.onSec.toFixed(1)+'s';
+    tEl.style.color=st.phase==='on'?'var(--accent)':'';
+  }},$('m-breath'),tEl,'止める');
+  tEl.style.color='';
   if(!out) return;
-  const r=analyzeBreath(out.x,out.sr);
+  const r=analyzeBreath(out.x,out.sr,out.noise);
   if(!r){showMsg('o-breath','息の音が拾えませんでした。マイクに少し近づいてもう一度どうぞ。');return;}
   patchToday({breath:r});
 };
