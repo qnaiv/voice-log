@@ -569,11 +569,11 @@ function analyzeKaga(x,sr){
   const sm=db.map((v,i)=>((db[i-1]??v)+v+(db[i+1]??v))/3);
   const act=sm.map(v=>v>top-16);
   const a0=act.indexOf(true), a1=act.lastIndexOf(true);
-  if(a0<0||(a1-a0)*hop<1.2) return null;
+  if(a0<0||(a1-a0)*hop<0.6) return null;
   const seg=sm.slice(a0,a1+1).map(v=>Math.max(v,top-30));
   const m=seg.reduce((a,b)=>a+b,0)/seg.length; const e=seg.map(v=>v-m);
   const e0=e.reduce((a,b)=>a+b*b,0); if(e0<=0||Math.sqrt(e0/e.length)<1.2) return null; // a held vowel barely moves
-  const minLag=Math.round(1/14/hop), maxLag=Math.round(1/1.5/hop);
+  const minLag=Math.round(1/14/hop), maxLag=Math.min(Math.round(1/1.5/hop),Math.floor(seg.length/2));
   const ac=[]; for(let L=0;L<=maxLag+1;L++){let s=0; for(let i=0;i+L<e.length;i++) s+=e[i]*e[i+L]; ac.push(s/e0);}
   let best=-1; for(let L=minLag;L<=maxLag;L++) if(ac[L]>ac[L-1]&&ac[L]>=ac[L+1]&&ac[L]>best) best=ac[L];
   if(best<0.15) return null;
