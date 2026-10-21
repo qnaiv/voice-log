@@ -351,7 +351,7 @@ nav.tabbar button[aria-current="page"]{color:var(--accent);font-weight:700}
 
     <article class="drill" id="d-kaga" data-id="kaga">
       <div class="drill-head"><div class="step">3</div>
-        <div class="t"><h3>「カ・ガ」連打 <span class="badge" hidden></span></h3><p class="how"><b>「カカカカ…」</b>と、できるだけ速く・はっきり10秒言い続けます。喉の奥（軟口蓋）を素早く持ち上げる練習です。回数を数えます。</p></div>
+        <div class="t"><h3>「カ・ガ」連打 <span class="badge" hidden></span></h3><p class="how">「静かに…」のあと<b>「どうぞ」</b>が出たら、<b>「カカカカ…」</b>とできるだけ速く・はっきり10秒言い続けます。喉の奥（軟口蓋）を素早く持ち上げる練習です。回数を数えます。</p></div>
         <span class="chip">未</span></div>
       <div class="row"><button class="rec" id="r-kaga"><span class="dot"></span><span>計測する</span></button><div class="meter"><i id="m-kaga"></i></div><span class="timer" id="t-kaga">10.0s</span></div>
       <div class="result" id="o-kaga" hidden></div>
@@ -559,40 +559,33 @@ function analyzeBreath(x,sr,calNoise){
   const stab=clamp(1-(sd/m)*1.5,0,1);
   return {sec:+sec.toFixed(1),stab:Math.round(stab*100),score:Math.round(Math.min(sec/30,1)*60+stab*40)};
 }
-/* syllable rate in "kakaka…": rhythm of the loudness envelope (dB).
-   Fast speech barely dips between syllables, so count by periodicity + small local dips, not by absolute thresholds. */
-function analyzeKaga(x,sr){
-  const hop=0.01; const r=frameRms(x,sr,hop); if(r.length<100) return null;
+/* "kakaka…": count each syllable as a loudness peak that stands clearly above the room noise
+   and has a real dip before it; speed comes only from the gaps between those counted syllables.
+   noiseAmp = room level measured in the first moment of the take (before speaking). */
+function analyzeKaga(x,sr,noiseAmp){
+  const hop=0.01; const r=frameRms(x,sr,hop); if(r.length<40) return null;
   const db=r.map(v=>20*Math.log10(v+1e-7));
-  const top=[...db].sort((a,b)=>b-a)[Math.floor(db.length*0.02)];
-  if(top<-68) return null;
   const sm=db.map((v,i)=>((db[i-1]??v)+v+(db[i+1]??v))/3);
-  const act=sm.map(v=>v>top-16);
-  const a0=act.indexOf(true), a1=act.lastIndexOf(true);
-  if(a0<0||(a1-a0)*hop<0.6) return null;
-  const seg=sm.slice(a0,a1+1).map(v=>Math.max(v,top-30));
-  const m=seg.reduce((a,b)=>a+b,0)/seg.length; const e=seg.map(v=>v-m);
-  const e0=e.reduce((a,b)=>a+b*b,0); if(e0<=0||Math.sqrt(e0/e.length)<1.2) return null; // a held vowel barely moves
-  const minLag=Math.round(1/14/hop), maxLag=Math.min(Math.round(1/1.5/hop),Math.floor(seg.length/2));
-  const ac=[]; for(let L=0;L<=maxLag+1;L++){let s=0; for(let i=0;i+L<e.length;i++) s+=e[i]*e[i+L]; ac.push(s/e0);}
-  let best=-1; for(let L=minLag;L<=maxLag;L++) if(ac[L]>ac[L-1]&&ac[L]>=ac[L+1]&&ac[L]>best) best=ac[L];
-  if(best<0.15) return null;
-  let lag=0; for(let L=minLag;L<=maxLag;L++) if(ac[L]>ac[L-1]&&ac[L]>=ac[L+1]&&ac[L]>=best*0.8){lag=L;break;}
-  const dur=seg.length*hop; const rate=1/(lag*hop);
-  /* peaks at least ~0.6 period apart with a 1.5 dB dip before them */
-  const minD=Math.max(1,Math.round(lag*0.6)); const pk=[]; let lowSince=Infinity;
-  for(let i=1;i<seg.length-1;i++){
-    lowSince=Math.min(lowSince,seg[i]);
-    if(seg[i]>=seg[i-1]&&seg[i]>seg[i+1]&&seg[i]-lowSince>=1.5){
-      if(pk.length&&i-pk[pk.length-1]<minD){ if(seg[i]>seg[pk[pk.length-1]]) pk[pk.length-1]=i; }
-      else{pk.push(i); lowSince=Infinity;}
+  const top=Math.max(...sm); if(top<-68) return null;
+  const sorted=[...sm].sort((a,b)=>a-b);
+  const floor=noiseAmp?Math.max(20*Math.log10(noiseAmp+1e-7),sorted[Math.floor(sorted.length*0.1)]):sorted[Math.floor(sorted.length*0.1)];
+  if(top<floor+12) return null;                       // nothing clearly louder than the room
+  const gate=Math.max(top-15,floor+10);               // a syllable must reach this level
+  const pk=[]; let low=Infinity;
+  for(let i=1;i<sm.length-1;i++){
+    low=Math.min(low,sm[i]);
+    if(sm[i]>=gate&&sm[i]>=sm[i-1]&&sm[i]>sm[i+1]&&sm[i]-low>=4){
+      if(pk.length&&i-pk[pk.length-1]<6){ if(sm[i]>sm[pk[pk.length-1]]) pk[pk.length-1]=i; }  // k-burst + vowel = one syllable
+      else pk.push(i);
+      low=sm[i];
     }
   }
-  let count=pk.length;
-  if(Math.abs(count-rate*dur)>rate*dur*0.3) count=Math.round(rate*dur);
-  if(count<4) return null;
-  const rr=+rate.toFixed(1);
-  return {count,rate:rr,score:Math.round(clamp(rr/6*100,0,100))};
+  if(pk.length<4) return null;
+  const gaps=[]; for(let k=1;k<pk.length;k++){const g=(pk[k]-pk[k-1])*hop; if(g<=0.4) gaps.push(g);}  // longer gaps = breath, not speed
+  if(gaps.length<3) return null;
+  const rate=+(gaps.length/gaps.reduce((a,b)=>a+b,0)).toFixed(1);
+  const a0=Math.max(0,pk[0]-30), a1=Math.min(sm.length-1,pk[pk.length-1]+30);
+  return {count:pk.length,rate,score:Math.round(clamp(rate/6*100,0,100)),viz:{env:sm.slice(a0,a1+1).map(v=>Math.round(Math.max(v,floor-6))),peaks:pk.map(p=>p-a0),gate:Math.round(gate)}};
 }
 /* median voice pitch (F0, Hz) with YIN over voiced frames */
 function pitchOf(x,sr){
@@ -843,7 +836,7 @@ $('r-breath').onclick=async()=>{
   if(!r){showMsg('o-breath','息の音が拾えませんでした。マイクに少し近づいてもう一度どうぞ。');return;}
   patchToday({breath:r});
 };
-let yawnTimer=null;
+let yawnTimer=null, kagaViz=null;
 const yawnSecs=()=>activeMenu().find(x=>x.id==='yawn')?.x2?60:30;
 $('r-yawn').onclick=()=>{
   const btn=$('r-yawn'), secs=yawnSecs();
@@ -852,11 +845,17 @@ $('r-yawn').onclick=()=>{
   yawnTimer=setInterval(()=>{left--; $('t-yawn').textContent=left+'s'; if(left<=0){clearInterval(yawnTimer);yawnTimer=null;btn.firstElementChild.textContent='もう一度';patchToday({yawn:true});}},1000);
 };
 $('r-kaga').onclick=async()=>{
-  const out=await capture($('r-kaga'),{maxSec:10,countdown:true},$('m-kaga'),$('t-kaga'),'止める'); $('t-kaga').textContent='10.0s';
+  const tEl=$('t-kaga');
+  const out=await capture($('r-kaga'),{maxSec:10.6,calib:0.6,tick:(lv,sec,st)=>{
+    tEl.textContent=st.phase==='calib'?'静かに…':(sec<1.1?'どうぞ':Math.max(0,10.6-sec).toFixed(1)+'s');
+    tEl.style.color=st.phase==='calib'?'':'var(--accent)';
+  }},$('m-kaga'),tEl,'止める');
+  tEl.textContent='10.0s'; tEl.style.color='';
   if(!out) return;
-  const r=analyzeKaga(out.x,out.sr);
-  if(!r){showMsg('o-kaga','「カカカ」のリズムが読み取れませんでした。息継ぎはしてOKなので、同じペースで3秒以上続けてみてください。');return;}
-  patchToday({kaga:r});
+  const sk=out.calib?Math.round(out.calib*out.sr):0;
+  const r=analyzeKaga(out.x.subarray(sk),out.sr,out.noise);
+  if(!r){kagaViz=null; showMsg('o-kaga','「カ」を4回以上はっきり聞き取れませんでした。「どうぞ」が出てから、1音ずつ区切って言ってみてください。');return;}
+  kagaViz=r.viz; const {viz,...rest}=r; patchToday({kaga:rest});
 };
 let nasalTmp={};
 async function nasalRec(which){
@@ -943,7 +942,8 @@ function renderToday(){
   });
   const ysec=yawnSecs(); $('yawn-sec').textContent=ysec; $('yawn-title').textContent=ysec===60?'あくび喉 ×2':'あくび喉'; if(!yawnTimer) $('t-yawn').textContent=ysec+'s';
   if(d.breath){const o=$('o-breath'); o.hidden=false; o.innerHTML=metricHTML([[d.breath.sec+'<small>秒</small>','吐けた時間<br>目標 30秒'],[d.breath.stab+'<small>%</small>','息の安定度<br>目標 80%以上'],scoreCell(d.breath.score)])+'<p class="tip"></p>'; o.querySelector('.tip').textContent=breathTip(d.breath);}
-  if(d.kaga){const o=$('o-kaga'); o.hidden=false; o.innerHTML=metricHTML([[d.kaga.rate+'<small>回/秒</small>','速さ<br>目標 毎秒6回'],[d.kaga.count+'<small>回</small>','言えた回数'],scoreCell(d.kaga.score)])+'<p class="tip"></p>'; o.querySelector('.tip').textContent=kagaTip(d.kaga);}
+  if(d.kaga){const o=$('o-kaga'); o.hidden=false; o.innerHTML=metricHTML([[d.kaga.rate+'<small>回/秒</small>','速さ<br>目標 毎秒6回'],[d.kaga.count+'<small>回</small>','言えた回数'],scoreCell(d.kaga.score)])+'<p class="tip"></p>'; o.querySelector('.tip').textContent=kagaTip(d.kaga);
+    if(kagaViz){const v=document.createElement('div'); v.innerHTML=kagaSVG(kagaViz); o.insertBefore(v,o.querySelector('.tip'));}}
   if(d.nasal){const o=$('o-nasal'); o.hidden=false; o.innerHTML=metricHTML([[d.nasal.diff+'<small>dB</small>','2回の音の差<br>小さいほど良い（2dB以下が目安）'],scoreCell(d.nasal.score),['','']])+'<p class="tip"></p>'; o.querySelector('.tip').textContent=nasalTip(d.nasal);}
   VOWELS.forEach(([k])=>$('v-'+k).classList.toggle('got',!!(d.vowel&&d.vowel.v&&d.vowel.v[k])));
   if(d.vowel&&d.vowel.v){
@@ -984,6 +984,13 @@ function lineChart(series,{yMax=100,unit='',rows=sortedDays(),label=d=>d.date,em
     if(pts.length>1) g+=`<polyline fill="none" stroke="${color}" stroke-width="${w}" stroke-linejoin="round" stroke-linecap="round" points="${pts.map(p=>x(p[0])+','+y(clamp(p[1],0,yMax))).join(' ')}"/>`;
     const last=pts[pts.length-1]; if(last) g+=`<circle cx="${x(last[0])}" cy="${y(clamp(last[1],0,yMax))}" r="${w+1.5}" fill="${color}"/>`;});
   return `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="推移グラフ">${g}</svg>`;
+}
+function kagaSVG(z){
+  const W=320,H=74,P=4; const n=z.env.length; const lo=Math.min(...z.env), hi=Math.max(...z.env)+2;
+  const x=i=>P+i*(W-2*P)/Math.max(1,n-1), y=v=>H-14-(v-lo)/(hi-lo||1)*(H-24);
+  const line=z.env.map((v,i)=>x(i).toFixed(1)+','+y(v).toFixed(1)).join(' ');
+  const dots=z.peaks.map(p=>`<circle cx="${x(p).toFixed(1)}" cy="${y(z.env[p]).toFixed(1)}" r="3.5" fill="var(--accent)"/>`).join('');
+  return `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="数えた「カ」の位置"><polyline points="${line}" fill="none" stroke="var(--muted)" stroke-width="1.2" stroke-linejoin="round"/>${dots}<text x="${P}" y="${H-2}" font-size="10" fill="var(--muted)">● が数えた「カ」（${z.peaks.length}回）</text></svg>`;
 }
 function vowelSVG(v,prev){
   const W=320,H=220,L=28,R=10,T=10,B=26; const fx=f2=>L+(1-(f2-600)/(2800-600))*(W-L-R); const fy=f1=>T+((f1-200)/(1100-200))*(H-T-B);
