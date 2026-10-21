@@ -181,6 +181,24 @@ button:disabled{opacity:.45;cursor:default}
 .dxrow:last-child{border-bottom:0}
 footer{font-size:12px;color:var(--muted)}
 
+button.info{flex:none;width:32px;height:32px;border-radius:50%;border:1.5px solid var(--muted);background:var(--surface);color:var(--muted);font:inherit;font-size:14px;font-weight:700;cursor:pointer;display:flex;align-items:center;justify-content:center}
+button.info:hover{border-color:var(--accent);color:var(--accent)}
+.sheet-back{position:fixed;inset:0;z-index:20;background:rgba(10,20,19,.5)}
+.sheet{position:fixed;left:0;right:0;bottom:0;z-index:21;max-height:88vh;overflow-y:auto;background:var(--surface);border-radius:20px 20px 0 0;
+  padding:10px max(18px,env(safe-area-inset-right,0px)) calc(22px + env(safe-area-inset-bottom,0px)) max(18px,env(safe-area-inset-left,0px));display:flex;flex-direction:column;gap:12px;box-shadow:0 -8px 30px rgba(0,0,0,.2)}
+.sheet .grip{align-self:center;width:40px;height:4px;border-radius:2px;background:var(--line);flex:none}
+.sheet .hd{display:flex;justify-content:space-between;align-items:center;gap:12px}
+.sheet .x{width:40px;height:40px;border-radius:50%;border:0;background:var(--bg);color:var(--ink);font:inherit;font-size:18px;cursor:pointer;flex:none}
+.seg{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:4px;background:var(--bg);padding:4px;border-radius:10px}
+.seg button{font:inherit;font-size:13px;border:0;border-radius:8px;background:transparent;color:var(--muted);min-height:38px;cursor:pointer}
+.seg button[aria-pressed="true"]{background:var(--surface);color:var(--ink);font-weight:700}
+.fig{background:var(--bg);border-radius:12px;padding:8px;display:flex;justify-content:center}
+.fig svg{width:100%;max-width:340px;height:auto}
+.kv{display:grid;grid-template-columns:84px minmax(0,1fr);gap:8px;font-size:14px;line-height:1.6}
+.kv dt{color:var(--muted);margin:0} .kv dd{margin:0}
+.mine{background:var(--ochre-soft);border-radius:10px;padding:10px 12px;font-size:14px;line-height:1.6}
+.mine b{color:var(--ochre-ink)}
+@media (min-width:600px){.sheet{left:50%;right:auto;width:560px;transform:translateX(-50%)}}
 nav.tabbar{position:fixed;left:0;right:0;bottom:0;z-index:5;background:var(--surface);border-top:1px solid var(--line);
   display:grid;grid-template-columns:repeat(3,minmax(0,1fr));padding:6px max(8px,env(safe-area-inset-left,0px)) calc(8px + env(safe-area-inset-bottom,0px)) max(8px,env(safe-area-inset-right,0px))}
 nav.tabbar button{font:inherit;font-size:11px;border:0;background:none;color:var(--muted);display:flex;flex-direction:column;align-items:center;gap:2px;min-height:48px;justify-content:center;cursor:pointer}
@@ -427,6 +445,17 @@ nav.tabbar button[aria-current="page"]{color:var(--accent);font-weight:700}
   <button data-tab="log"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 19V5M4 19h16M8 15l4-4 3 3 5-6"/></svg>記録</button>
   <button data-tab="diag"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="8"/><path d="M12 8v4l3 2"/></svg>診断</button>
 </nav>
+<div class="sheet-back" id="sh-back" hidden></div>
+<section class="sheet" id="sheet" role="dialog" aria-modal="true" aria-labelledby="sh-title" hidden>
+  <div class="grip"></div>
+  <div class="hd"><div style="display:flex;flex-direction:column"><span class="small muted">この練習のねらい</span><h2 id="sh-title" style="font-size:19px"></h2></div><button class="x" id="sh-close" aria-label="閉じる">×</button></div>
+  <p id="sh-aim" style="font-size:15px;font-weight:700;color:var(--accent-ink)"></p>
+  <div class="seg" id="sh-seg"><button id="sh-s0" aria-pressed="true"></button><button id="sh-s1" aria-pressed="false"></button></div>
+  <div class="fig" id="sh-fig"></div>
+  <p id="sh-cap" style="font-size:14px;line-height:1.7"></p>
+  <dl class="kv" style="margin:0"><dt>効く場所</dt><dd id="sh-where"></dd><dt>コツ</dt><dd id="sh-tip"></dd><dt>よくある失敗</dt><dd id="sh-miss"></dd></dl>
+  <div class="mine" id="sh-mine" hidden><b>あなたの場合　</b><span id="sh-mine-t"></span></div>
+</section>
 <input type="file" id="filepick" accept="audio/*" capture hidden>
 
 <script>
@@ -437,7 +466,7 @@ const keyOf=d=>d.toLocaleDateString('sv-SE');
 const todayKey=()=>keyOf(new Date());
 const VOWELS=[['a','あ'],['i','い'],['u','う'],['e','え'],['o','お']];
 const LEAK_T=1.0, BLOCK_T=4.0, REDIAG_DAYS=30, DX_V=2;
-const APP_VERSION='20261021-0956';
+const APP_VERSION='20261021-1020';
 const TYPE_LABEL={ok:'問題なし',open:'開鼻声タイプ',closed:'閉鼻声タイプ',mixed:'混合タイプ'};
 const TYPE_SHORT={ok:'問題なし',open:'開鼻声',closed:'閉鼻声',mixed:'混合'};
 const DRILL_NAME={breath:'ロングブレス',yawn:'あくび喉',kaga:'「カ・ガ」連打',nasal:'鼻つまみチェック',vowel:'母音マップ'};
@@ -459,11 +488,12 @@ const daysBetween=(a,b)=>Math.round((new Date(b+'T00:00')-new Date(a+'T00:00'))/
 function menuFor(type,gs){
   const m=[{id:'breath'},{id:'yawn'},{id:'nasal'},{id:'vowel'}];
   const by=id=>m.find(x=>x.id===id);
-  const addKaga=()=>{if(!by('kaga')) m.splice(2,0,{id:'kaga',badge:'追加'});};
-  if(type==='open'||type==='mixed'){by('yawn').badge='強化'; by('yawn').x2=true; addKaga();}
+  const addKaga=why=>{if(!by('kaga')) m.splice(2,0,{id:'kaga',badge:'追加',why});};
+  const tname=type==='mixed'?'混合タイプ':'開鼻声タイプ';
+  if(type==='open'||type==='mixed'){by('yawn').badge='強化'; by('yawn').x2=true; by('yawn').why=`${tname}と診断されたため、2セット（60秒）にしています。`; addKaga(`${tname}と診断されたため追加しています。軟口蓋を素早く持ち上げる力をつけます。`);}
   if(type==='closed'||type==='mixed'){by('nasal').rest=true; by('nasal').badge='お休み';}
-  if(gs.includes('volume')&&!by('breath').badge) by('breath').badge='強化';
-  if(gs.includes('artic')){if(!by('vowel').badge) by('vowel').badge='強化'; addKaga();}
+  if(gs.includes('volume')&&!by('breath').badge){by('breath').badge='強化'; by('breath').why='目的に「通る声・声量」を選んだため強化しています。声量の土台は息の量のコントロールです。';}
+  if(gs.includes('artic')){if(!by('vowel').badge){by('vowel').badge='強化'; by('vowel').why='目的に「滑舌」を選んだため強化しています。母音の形がはっきりすると言葉が聞き取りやすくなります。';} addKaga('目的に「滑舌」を選んだため追加しています。');}
   return m;
 }
 const activeMenu=()=>menuFor(curType(),goals()).filter(x=>!x.rest);
@@ -1026,6 +1056,98 @@ function renderToday(){
   renderSummary();
 }
 $('typechip').onclick=()=>go(lastDiag()?'diag':'intro');
+
+/* ---------- "why this drill" sheet with a cross-section figure ---------- */
+function palateSVG(up,{pinch=false,closure=false}={}){
+  const flap=up?'M190 80 Q225 78 248 68':'M190 80 Q230 95 238 125';
+  const flow=up?'<path d="M267 160 L267 120 Q262 115 230 128 L110 140" fill="none" stroke="var(--accent)" stroke-width="2.5" stroke-dasharray="6 4"/><path d="M116 134 L104 140 L116 146" fill="none" stroke="var(--accent)" stroke-width="2.5"/>'
+    :'<path d="M267 160 L267 105 Q262 70 235 66 L120 60" fill="none" stroke="var(--bad)" stroke-width="2.5" stroke-dasharray="6 4"/><path d="M126 55 L114 60 L126 66" fill="none" stroke="var(--bad)" stroke-width="2.5"/>'+(up?'':'<path d="M240 108 Q205 118 180 132 L110 140" fill="none" stroke="var(--accent)" stroke-width="2" stroke-dasharray="4 4" opacity=".7"/>');
+  const stop=closure?'<path d="M120 160 Q170 150 200 110 Q210 96 222 92" fill="none" stroke="var(--ochre-ink)" stroke-width="11" stroke-linecap="round" opacity=".55"/><text x="52" y="118" font-size="11" font-weight="700" fill="var(--ochre-ink)">舌の奥で息をせき止める</text>':'';
+  const nose=pinch?'<path d="M26 34 L44 58 M26 58 L44 34" stroke="var(--ink)" stroke-width="3" stroke-linecap="round"/><text x="10" y="76" font-size="11" fill="var(--ink)">つまむ</text>':'';
+  return `<svg viewBox="0 0 320 200" role="img" aria-label="鼻と口と喉の断面図。軟口蓋が${up?'持ち上がり鼻への通り道をふさいでいる':'下がって息が鼻へ抜けている'}">
+  <path d="M40 40 Q120 20 200 40 L230 60 L230 78 L60 78 Q40 70 40 40 Z" fill="var(--accent-soft)" stroke="var(--muted)" stroke-width="1.2"/>
+  <text x="105" y="58" font-size="12" fill="var(--ink)">鼻の通り道</text>
+  <path d="M40 100 L190 100 Q215 100 225 112 L225 150 Q160 168 60 160 Q40 150 40 100 Z" fill="var(--ochre-soft)" stroke="var(--ochre)" stroke-width="1.2"/>
+  <text x="70" y="140" font-size="12" fill="var(--ochre-ink)">口の中</text>
+  <path d="M60 78 L190 78 L190 100 L40 100 Z" fill="var(--line)"/>
+  <text x="80" y="93" font-size="11" fill="var(--ink)">硬い天井（硬口蓋）</text>
+  <rect x="250" y="40" width="34" height="150" rx="10" fill="var(--surface)" stroke="var(--muted)" stroke-width="1.2"/>
+  <text x="256" y="182" font-size="11" fill="var(--ink)">喉</text>
+  <path d="${flap}" fill="none" stroke="var(--ochre)" stroke-width="9" stroke-linecap="round"/>
+  ${closure?stop:flow}${nose}
+  <text x="194" y="${up?62:120}" font-size="11" font-weight="700" fill="var(--ochre-ink)">軟口蓋</text></svg>`;
+}
+function breathSVG(inhale){
+  const dia=inhale?'M70 150 Q160 168 250 150':'M70 150 Q160 100 250 150';
+  const lung=inhale?20:0, belly=inhale?14:0;
+  return `<svg viewBox="0 0 320 210" role="img" aria-label="胴体の断面図。${inhale?'吸うと横隔膜が下がり肺が広がる':'吐くと横隔膜が上がり肺から息が出る'}">
+  <path d="M120 10 L200 10 L200 30 Q270 40 272 120 L${272+belly} 200 L${48-belly} 200 L48 120 Q50 40 120 30 Z" fill="var(--bg)" stroke="var(--muted)" stroke-width="1.2"/>
+  <rect x="150" y="10" width="20" height="40" rx="6" fill="var(--surface)" stroke="var(--muted)" stroke-width="1.2"/>
+  <path d="M150 50 Q100 52 88 ${110+lung} Q90 ${140+lung*0.6} 150 ${138+lung*0.6} Z" fill="var(--accent-soft)" stroke="var(--accent)" stroke-width="1.2"/>
+  <path d="M170 50 Q220 52 232 ${110+lung} Q230 ${140+lung*0.6} 170 ${138+lung*0.6} Z" fill="var(--accent-soft)" stroke="var(--accent)" stroke-width="1.2"/>
+  <text x="104" y="100" font-size="12" fill="var(--ink)">肺</text>
+  <path d="${dia}" fill="none" stroke="var(--ochre)" stroke-width="6" stroke-linecap="round"/>
+  <text x="128" y="${inhale?186:172}" font-size="11" font-weight="700" fill="var(--ochre-ink)">横隔膜</text>
+  <path d="M160 ${inhale?6:44} L160 ${inhale?44:6}" stroke="${inhale?'var(--accent)':'var(--good)'}" stroke-width="2.5"/><path d="M154 ${inhale?36:14} L160 ${inhale?46:4} L166 ${inhale?36:14}" fill="none" stroke="${inhale?'var(--accent)':'var(--good)'}" stroke-width="2.5"/>
+  <text x="176" y="24" font-size="11" fill="var(--ink)">${inhale?'鼻から吸う':'細く長く吐く'}</text></svg>`;
+}
+function tongueSVG(i){
+  const tongue=i?'M70 150 Q90 108 150 100 Q205 100 220 140 L220 165 L70 165 Z':'M70 158 Q120 140 170 140 Q210 140 222 160 L222 168 L70 168 Z';
+  const jaw=i?165:182;
+  return `<svg viewBox="0 0 320 210" role="img" aria-label="口の断面図。${i?'「い」は舌が前で高い':'「あ」は口が縦に開き舌が下がる'}">
+  <path d="M40 60 L200 60 Q240 62 250 90 L250 120" fill="none" stroke="var(--muted)" stroke-width="10" stroke-linecap="round"/>
+  <text x="96" y="52" font-size="11" fill="var(--ink)">口の天井</text>
+  <path d="M40 ${jaw} L230 ${jaw} L250 ${jaw-20}" fill="none" stroke="var(--muted)" stroke-width="10" stroke-linecap="round"/>
+  <text x="96" y="${jaw+18}" font-size="11" fill="var(--ink)">下あご</text>
+  <path d="${tongue}" fill="var(--ochre-soft)" stroke="var(--ochre)" stroke-width="1.5"/>
+  <text x="${i?118:120}" y="${i?132:158}" font-size="12" font-weight="700" fill="var(--ochre-ink)">舌</text>
+  <rect x="34" y="${i?140:150}" width="10" height="16" rx="3" fill="var(--surface)" stroke="var(--muted)"/>
+  <text x="10" y="${i?134:144}" font-size="10" fill="var(--ink)">下の前歯</text>
+  <path d="M250 120 L250 200" stroke="var(--muted)" stroke-width="10" stroke-linecap="round"/>
+  <text x="258" y="170" font-size="11" fill="var(--ink)">喉</text></svg>`;
+}
+const INFO={
+  breath:{title:'ロングブレス',aim:'息の量を一定に保つ力をつける',where:'お腹まわり（横隔膜）と息の通り道',
+    tip:'吸う量を増やすより、吐く息を細く長く、強さを変えずに',miss:'お腹を固めて喉まで力む。最後に一気に吐いてしまう',
+    tabs:['吸うとき','吐くとき'],fig:k=>breathSVG(k===0),
+    cap:['吸うと横隔膜が下がって肺が広がり、お腹が少しふくらみます。','吐くときは横隔膜がゆっくり戻ります。この戻る速さを一定に保てると、声が揺れず語尾まで届きます。']},
+  yawn:{title:'あくび喉',aim:'喉の奥（軟口蓋）を持ち上げる感覚をつかむ',where:'口の天井の奥にある柔らかい部分（軟口蓋）',
+    tip:'あくびの出始めの「喉の奥が広がる」形を保ったまま声を出す',miss:'舌の付け根まで下げて、声がこもる',
+    tabs:['下がっているとき','持ち上がったとき'],fig:k=>palateSVG(k===1),
+    cap:['軟口蓋が下がっていると、息と声の一部が鼻へ抜けて鼻声になります。','軟口蓋が持ち上がると鼻への通り道がふさがり、息と声が口から出ます。これが目指す状態です。']},
+  kaga:{title:'「カ・ガ」連打',aim:'軟口蓋を素早く上げ下げする筋トレ',where:'軟口蓋と舌の奥',
+    tip:'速さより、1音ずつの「カ」の破裂をはっきり出す',miss:'速さを優先して音がつぶれる',
+    tabs:['「カ」の直前','「カ」の瞬間'],fig:k=>palateSVG(true,{closure:k===0}),
+    cap:['「カ」を言う直前は、舌の奥を軟口蓋に押し当てて息をせき止めます。このとき軟口蓋は持ち上がり、鼻への道もふさがっています。','舌を離した瞬間に、ためた息が口から一気に出て「カ」になります。これを素早く繰り返すことで、軟口蓋を上げたまま保つ力がつきます。']},
+  nasal:{title:'鼻つまみチェック',aim:'練習ではなく測定。話すときに息が鼻へ漏れていないかを毎日確かめます',where:'軟口蓋のふさがり具合',
+    tip:'3回とも同じ距離・同じ声の大きさで読む',miss:'鼻をつまむ強さが毎回違う、口までふさいでしまう',
+    tabs:['ふさがっている人','漏れている人'],fig:k=>palateSVG(k===0,{pinch:true}),
+    cap:['軟口蓋がしっかりふさがっていれば、鼻をつまんでも息は口からしか出ないので、声はほとんど変わりません。','鼻へ漏れている人は、つまむと鼻の中に息がこもって声が変わります。その変わり方を数値にしています。']},
+  vowel:{title:'母音マップ',aim:'口の開きと舌の位置を確かめる',where:'あご・舌・唇',
+    tip:'舌先を下の前歯の裏に当てたまま発声する',miss:'「い」で舌が奥に引っ込む。「あ」であごが開ききらない',
+    tabs:['「い」','「あ」'],fig:k=>tongueSVG(k===0),
+    cap:['「い」は舌が前に出て高い位置に来ます。小顎の人は舌が奥に引っ込みやすく、「い」がこもりがちです。','「あ」はあごを縦に開き、舌は下がります。マップで「あ」が下に来るほど、口がよく開いています。']}
+};
+let shId=null, shK=0, shReturn=null;
+function paintSheet(){
+  const it=INFO[shId]; $('sh-fig').innerHTML=it.fig(shK); $('sh-cap').textContent=it.cap[shK];
+  ['sh-s0','sh-s1'].forEach((id,k)=>{$(id).textContent=it.tabs[k]; $(id).setAttribute('aria-pressed',String(k===shK));});
+}
+function openSheet(id,btn){
+  const it=INFO[id]; if(!it) return; shId=id; shK=id==='yawn'||id==='nasal'?0:0; shReturn=btn;
+  $('sh-title').textContent=it.title+(id==='yawn'&&yawnSecs()===60?' ×2':''); $('sh-aim').textContent=it.aim;
+  $('sh-where').textContent=it.where; $('sh-tip').textContent=it.tip; $('sh-miss').textContent=it.miss;
+  const why=menuFor(curType(),goals()).find(x=>x.id===id)?.why; $('sh-mine').hidden=!why; if(why) $('sh-mine-t').textContent=why;
+  paintSheet(); $('sh-back').hidden=false; $('sheet').hidden=false; $('sheet').scrollTop=0; document.body.style.overflow='hidden'; $('sh-close').focus();
+}
+function closeSheet(){ $('sh-back').hidden=true; $('sheet').hidden=true; document.body.style.overflow=''; if(shReturn) shReturn.focus(); shId=null; }
+$('sh-s0').onclick=()=>{shK=0; paintSheet();}; $('sh-s1').onclick=()=>{shK=1; paintSheet();};
+$('sh-close').onclick=closeSheet; $('sh-back').onclick=closeSheet;
+$('sheet').addEventListener('keydown',e=>{if(e.key==='Escape') closeSheet();});
+document.querySelectorAll('#drills .drill').forEach(el=>{
+  const b=document.createElement('button'); b.className='info'; b.textContent='i'; b.setAttribute('aria-label','この練習のねらいを見る');
+  b.onclick=()=>openSheet(el.dataset.id,b); el.querySelector('.drill-head').insertBefore(b,el.querySelector('.chip'));
+});
 $('dxbanner-b').onclick=()=>{dx={}; go('intro');};
 function sortedDays(){return Object.values(S.days).filter(d=>d.total!=null||d.yawn).sort((a,b)=>a.date<b.date?-1:1);}
 function firstVowel(){return sortedDays().find(d=>d.vowel&&d.vowel.area);}
