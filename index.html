@@ -218,7 +218,7 @@ nav.tabbar button[aria-current="page"]{color:var(--accent);font-weight:700}
     <h2 style="font-size:22px">まず、あなたの声のことを少しだけ教えてください</h2>
     <p class="muted small">このあと2分ほどの診断で、声のタイプに合わせた毎日の練習メニューを作ります。</p>
   </div>
-  <div class="card">
+  <div class="card" id="ob-pitchcard">
     <h3>声の高さ</h3>
     <p class="small muted">「測る」を押して、下の文をふだんの話し声で読んでください（4秒）。</p>
     <p class="sentence">アヒルがさわぐ　カラスがかえる</p>
@@ -253,7 +253,7 @@ nav.tabbar button[aria-current="page"]{color:var(--accent);font-weight:700}
     <h2 style="font-size:22px">2つの録音と5つの質問で、鼻声のタイプを調べます</h2>
   </div>
   <div class="steplist">
-    <div class="card"><div class="step">1</div><div style="display:flex;flex-direction:column;gap:2px"><h3>抜けチェック</h3><p class="small muted">短い文を普通に・鼻をつまんで読みます。息が鼻に抜けていないかを見ます。</p></div></div>
+    <div class="card"><div class="step">1</div><div style="display:flex;flex-direction:column;gap:2px"><h3>抜けチェック</h3><p class="small muted">短い文を普通に・鼻をつまんで読みます。息が鼻に抜けていないかと、声の高さを測ります。</p></div></div>
     <div class="card"><div class="step">2</div><div style="display:flex;flex-direction:column;gap:2px"><h3>詰まりチェック</h3><p class="small muted">マ行・ナ行の多い文を読んで、鼻の通り道がふさがっていないかを見ます。</p></div></div>
     <div class="card"><div class="step">3</div><div style="display:flex;flex-direction:column;gap:2px"><h3>問診</h3><p class="small muted">鼻づまりの頻度や口呼吸について、タップで5問答えます。</p></div></div>
   </div>
@@ -328,6 +328,7 @@ nav.tabbar button[aria-current="page"]{color:var(--accent);font-weight:700}
     </div>
   </div>
   <div class="mcards" id="rs-metrics"></div>
+  <p class="small muted" id="rs-pitch" hidden></p>
   <div style="display:flex;flex-direction:column;gap:8px">
     <h3 id="rs-menu-h">あなた向けの毎日のメニュー</h3>
     <div class="mlist" id="rs-menu"></div>
@@ -481,7 +482,7 @@ const keyOf=d=>d.toLocaleDateString('sv-SE');
 const todayKey=()=>keyOf(new Date());
 const VOWELS=[['a','あ'],['i','い'],['u','う'],['e','え'],['o','お']];
 const LEAK_T=1.0, BLOCK_T=4.0, REDIAG_DAYS=30, DX_V=2;
-const APP_VERSION='20261021-1031';
+const APP_VERSION='20261021-1039';
 const TYPE_LABEL={ok:'問題なし',open:'開鼻声タイプ',closed:'閉鼻声タイプ',mixed:'混合タイプ'};
 const TYPE_SHORT={ok:'問題なし',open:'開鼻声',closed:'閉鼻声',mixed:'混合'};
 const DRILL_NAME={breath:'ロングブレス',yawn:'あくび喉',kaga:'「カ・ガ」連打',nasal:'鼻つまみチェック',vowel:'母音マップ'};
@@ -805,8 +806,9 @@ function paintOnboard(){
   $('ob-pickmsg').textContent=!ob.f0?'声の高さを選んでください。':ob.pitch===auto?'測った結果から自動で選びました。違うと思えば変えられます。':'測った結果とは違う方を選んでいます。';
   $('ob-measure').lastElementChild.textContent=ob.f0?'測り直す':'測る';
   document.querySelectorAll('#ob-goals .opt').forEach(b=>b.setAttribute('aria-pressed',String(ob.goals.includes(b.dataset.v))));
-  const ok=ob.pitch&&ob.goals.length; $('ob-next').disabled=!ok; $('ob-hint').hidden=!!ok;
-  $('ob-hint').textContent=!ob.pitch&&!ob.goals.length?'声の高さを測って、目的を1つ以上選んでください':!ob.pitch?'声の高さを測ってください':'目的を1つ以上選んでください';
+  const askPitch=obEdit; $('ob-pitchcard').hidden=!askPitch;
+  const ok=(!askPitch||ob.pitch)&&ob.goals.length; $('ob-next').disabled=!ok; $('ob-hint').hidden=!!ok;
+  $('ob-hint').textContent=askPitch&&!ob.pitch&&!ob.goals.length?'声の高さを測って、目的を1つ以上選んでください':askPitch&&!ob.pitch?'声の高さを測ってください':'目的を1つ以上選んでください';
 }
 document.querySelectorAll('#ob-pitch .opt').forEach(b=>b.onclick=()=>{ob.pitch=b.dataset.v; paintOnboard();});
 $('ob-manual').onclick=()=>{obManual=true; paintOnboard();};
@@ -819,7 +821,8 @@ $('ob-measure').onclick=async()=>{
 };
 document.querySelectorAll('#ob-goals .opt').forEach(b=>b.onclick=()=>{const v=b.dataset.v; ob.goals=ob.goals.includes(v)?ob.goals.filter(x=>x!==v):[...ob.goals,v]; paintOnboard();});
 $('ob-next').onclick=()=>{
-  S.settings={...S.settings,pitch:ob.pitch,goals:ob.goals,f0:ob.f0,onboarded:true}; saveSettings();
+  const pitchPatch=obEdit?{pitch:ob.pitch,f0:ob.f0,pitchByHand:!!ob.pitch&&(!ob.f0||ob.pitch!==(ob.f0<F0_SPLIT?'low':'high'))}:{};
+  S.settings={...S.settings,...pitchPatch,goals:ob.goals,onboarded:true}; saveSettings();
   if(obEdit&&S.diags.length){obEdit=false; go('diag');} else {obEdit=false; backView='today'; go('intro');}
 };
 
@@ -835,11 +838,12 @@ async function leakRec(n){
   if(!out) return;
   const sp=toneSpec(out.x,out.sr);
   if(!sp){$('lk-msg').textContent='声が小さく聞き取れませんでした。もう少し大きめにもう一度どうぞ。'; $('lk-msg').className='small'; return;}
-  dx['l'+n]=sp; setRow('lk-row'+n,true,'録音できました');
+  dx['l'+n]=sp; if(n!==2) dx['f'+n]=pitchOf(out.x,out.sr); setRow('lk-row'+n,true,'録音できました');
   if(dx.l1&&dx.l2&&dx.l3){
     /* how much more pinching changes the tone than simply reading it again */
     const pinch=(specDiff(dx.l1,dx.l2)+specDiff(dx.l3,dx.l2))/2, again=specDiff(dx.l1,dx.l3);
     dx.leak=+Math.max(0,pinch-again).toFixed(2); dx.leakRaw={pinch:+pinch.toFixed(2),again:+again.toFixed(2)};
+    const fs=[dx.f1,dx.f3].filter(Boolean); dx.f0=fs.length?Math.round(fs.reduce((a,b)=>a+b,0)/fs.length):null;
     $('lk-msg').textContent='テスト1 完了'; $('lk-msg').className='donebox';
     setTimeout(()=>{if(view==='leak') go('block');},1000);
   }
@@ -890,7 +894,8 @@ function typeOf(leak,block,ans){
 }
 $('ask-next').onclick=()=>{
   const type=typeOf(dx.leak,dx.block,dx.ans);
-  const rec={date:todayKey(),v:DX_V,leak:dx.leak,block:dx.block,leakRaw:dx.leakRaw,blockRaw:dx.blockRaw,type,answers:dx.ans};
+  const rec={date:todayKey(),v:DX_V,leak:dx.leak,block:dx.block,leakRaw:dx.leakRaw,blockRaw:dx.blockRaw,f0:dx.f0,type,answers:dx.ans};
+  if(dx.f0&&!S.settings.pitchByHand){S.settings={...S.settings,f0:dx.f0,pitch:dx.f0<F0_SPLIT?'low':'high'}; saveSettings();}
   S.diags=S.diags.filter(d=>d.date!==rec.date); S.diags.push(rec); saveDiags();
   const d=S.days[todayKey()]; if(d){d.total=totalOf(d); saveDays();}
   renderResult(rec); go('result');
@@ -924,6 +929,8 @@ function renderResult(rec){
   $('rs-dot').style.left=x+'%'; $('rs-dot').style.top=y+'%';
   $('rs-you').style.left=x+'%'; $('rs-you').style.top=y+'%'; $('rs-you').classList.toggle('up',y>70); $('rs-you').classList.toggle('left',y<=70&&x>60);
   $('rs-metrics').innerHTML=dxCards(rec);
+  const pe=$('rs-pitch'); pe.hidden=!rec.f0;
+  if(rec.f0) pe.textContent=`声の高さ：平均 ${rec.f0} Hz（${rec.f0<F0_SPLIT?'低め':'高め'}）`+(S.settings.pitchByHand?`。設定では手で選んだ「${S.settings.pitch==='high'?'高め':'低め'}」を使っています。`:'。母音マップの採点基準に使います（診断タブの設定で変更できます）。');
   const m=menuFor(rec.type,goals());
   $('rs-menu-h').textContent=needDoc?'いまできるメニュー':'あなた向けの毎日のメニュー';
   $('rs-menu').innerHTML=m.map(it=>{
@@ -1042,9 +1049,9 @@ function renderToday(){
   const d=S.days[todayKey()]||{};
   const type=curType(), menu=activeMenu();
   // header chip
-  const chip=$('typechip'); const pitch=S.settings.pitch==='high'?'声 高め':'声 低め';
+  const chip=$('typechip'); const pitch=S.settings.pitch?(S.settings.pitch==='high'?' ・ 声 高め':' ・ 声 低め'):'';
   chip.className='typechip'+(type?(type==='ok'?' ok':''):' none');
-  chip.textContent=type?`${TYPE_LABEL[type]} ・ ${pitch}`:`未診断 ・ ${pitch}`;
+  chip.textContent=(type?TYPE_LABEL[type]:'未診断')+pitch;
   // diagnosis banner
   const ld=lastDiag(); const bn=$('dxbanner');
   if(!ld){bn.hidden=false; $('dxbanner-t').textContent='鼻声タイプ診断がまだです（約2分）。結果に合わせてメニューを組み直します。';}
@@ -1247,7 +1254,7 @@ function renderDiag(){
   const nd=S.diags.filter(d=>d.v===DX_V);
   $('dg-chart').innerHTML=lineChart([{get:d=>d.leak,color:'var(--ochre)',w:3}],{rows:nd,yMax:Math.max(3,Math.ceil(Math.max(0,...nd.map(d=>d.leak)))),unit:'dB',ref:LEAK_T,empty:'診断すると、ここに息の抜けの推移が描かれます。'});
   $('dg-list').innerHTML=S.diags.length?S.diags.slice().reverse().map(d=>`<div class="dxrow"><span class="num small">${d.date.slice(5).replace('-','/')}</span><b style="font-size:14px">${TYPE_SHORT[d.type]}</b><span class="small muted">${d.v===DX_V?`抜け${d.leak}dB ・ 通り${d.block>0?'+':''}${d.block}%`:'旧方式'}</span></div>`).join(''):'<p class="empty">履歴はまだありません。</p>';
-  $('dg-settings').textContent=`声の高さ：${S.settings.pitch==='high'?'高め':'低め'}${S.settings.f0?`（${S.settings.f0} Hz）`:''}　目的：${goals().map(g=>GOAL_NAME[g]).join('・')||'未設定'}`;
+  $('dg-settings').textContent=`声の高さ：${S.settings.pitch?(S.settings.pitch==='high'?'高め':'低め'):'未測定'}${S.settings.f0?`（${S.settings.f0} Hz${S.settings.pitchByHand?'、手で変更':''}）`:''}　目的：${goals().map(g=>GOAL_NAME[g]).join('・')||'未設定'}`;
 }
 $('dg-edit').textContent='声の高さ・目的を変更'; $('dg-edit').onclick=()=>{obEdit=true; go('onboard');};
 $('rs-ask').onclick=()=>{$('rs-confirm').hidden=false; $('rs-ask').hidden=true; $('rs-confirm').scrollIntoView({block:'center',behavior:'smooth'});};
