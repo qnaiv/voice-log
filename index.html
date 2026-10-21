@@ -468,7 +468,7 @@ const keyOf=d=>d.toLocaleDateString('sv-SE');
 const todayKey=()=>keyOf(new Date());
 const VOWELS=[['a','あ'],['i','い'],['u','う'],['e','え'],['o','お']];
 const LEAK_T=1.0, BLOCK_T=4.0, REDIAG_DAYS=30, DX_V=2;
-const APP_VERSION='20261021-1022';
+const APP_VERSION='20261021-1026';
 const TYPE_LABEL={ok:'問題なし',open:'開鼻声タイプ',closed:'閉鼻声タイプ',mixed:'混合タイプ'};
 const TYPE_SHORT={ok:'問題なし',open:'開鼻声',closed:'閉鼻声',mixed:'混合'};
 const DRILL_NAME={breath:'ロングブレス',yawn:'あくび喉',kaga:'「カ・ガ」連打',nasal:'鼻つまみチェック',vowel:'母音マップ'};
@@ -568,6 +568,7 @@ function recordFile(){
 async function capture(btn,opts,meterEl,timerEl,labelLive){
   if(active){active.stop();return null;}
   const label=btn.querySelector('span:last-child'); const orig=label?label.textContent:'';
+  getCtx();   // start/resume audio inside the tap itself: iPhone Safari refuses it after an await
   const ok=await ensureMic(opts.clean);
   if(!ok){try{return await recordFile();}catch(e){return null;}}
   btn.classList.add('live'); if(label) label.textContent=labelLive||'止める';
@@ -968,6 +969,7 @@ const vb=$('vbtns');
 VOWELS.forEach(([k,kana])=>{const b=document.createElement('button'); b.id='v-'+k; b.textContent=kana; b.setAttribute('aria-label','「'+kana+'」を録音'); b.onclick=()=>vowelRec(k,b); vb.appendChild(b);});
 async function vowelRec(k,btn){
   if(active) return;
+  getCtx();
   const ok=await ensureMic(); let out;
   if(ok){btn.classList.add('live'); out=await recordMic({maxSec:2,onTick:(lv,sec)=>{$('m-vowel').style.width=lv*100+'%'; $('t-vowel').textContent=(2-sec).toFixed(1)+'s';}}); btn.classList.remove('live'); $('m-vowel').style.width='0'; $('t-vowel').textContent='';}
   else{try{out=await recordFile()}catch(e){return}}
