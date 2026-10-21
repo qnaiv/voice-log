@@ -181,8 +181,10 @@ button:disabled{opacity:.45;cursor:default}
 .dxrow:last-child{border-bottom:0}
 footer{font-size:12px;color:var(--muted)}
 
-button.info{flex:none;width:32px;height:32px;border-radius:50%;border:1.5px solid var(--muted);background:var(--surface);color:var(--muted);font:inherit;font-size:14px;font-weight:700;cursor:pointer;display:flex;align-items:center;justify-content:center}
-button.info:hover{border-color:var(--accent);color:var(--accent)}
+button.info{position:relative;flex:none;width:18px;height:18px;padding:0;border:0;background:none;color:var(--muted);cursor:pointer;display:inline-flex;align-items:center;justify-content:center;vertical-align:-3px}
+button.info svg{width:18px;height:18px;display:block}
+button.info::before{content:"";position:absolute;inset:-13px}   /* keeps a ~44px tap area around the small icon */
+button.info:hover,button.info:focus-visible{color:var(--accent)}
 .sheet-back{position:fixed;inset:0;z-index:20;background:rgba(10,20,19,.5)}
 .sheet{position:fixed;left:0;right:0;bottom:0;z-index:21;max-height:88vh;overflow-y:auto;background:var(--surface);border-radius:20px 20px 0 0;
   padding:10px max(18px,env(safe-area-inset-right,0px)) calc(22px + env(safe-area-inset-bottom,0px)) max(18px,env(safe-area-inset-left,0px));display:flex;flex-direction:column;gap:12px;box-shadow:0 -8px 30px rgba(0,0,0,.2)}
@@ -466,7 +468,7 @@ const keyOf=d=>d.toLocaleDateString('sv-SE');
 const todayKey=()=>keyOf(new Date());
 const VOWELS=[['a','あ'],['i','い'],['u','う'],['e','え'],['o','お']];
 const LEAK_T=1.0, BLOCK_T=4.0, REDIAG_DAYS=30, DX_V=2;
-const APP_VERSION='20261021-1020';
+const APP_VERSION='20261021-1022';
 const TYPE_LABEL={ok:'問題なし',open:'開鼻声タイプ',closed:'閉鼻声タイプ',mixed:'混合タイプ'};
 const TYPE_SHORT={ok:'問題なし',open:'開鼻声',closed:'閉鼻声',mixed:'混合'};
 const DRILL_NAME={breath:'ロングブレス',yawn:'あくび喉',kaga:'「カ・ガ」連打',nasal:'鼻つまみチェック',vowel:'母音マップ'};
@@ -1145,8 +1147,10 @@ $('sh-s0').onclick=()=>{shK=0; paintSheet();}; $('sh-s1').onclick=()=>{shK=1; pa
 $('sh-close').onclick=closeSheet; $('sh-back').onclick=closeSheet;
 $('sheet').addEventListener('keydown',e=>{if(e.key==='Escape') closeSheet();});
 document.querySelectorAll('#drills .drill').forEach(el=>{
-  const b=document.createElement('button'); b.className='info'; b.textContent='i'; b.setAttribute('aria-label','この練習のねらいを見る');
-  b.onclick=()=>openSheet(el.dataset.id,b); el.querySelector('.drill-head').insertBefore(b,el.querySelector('.chip'));
+  const b=document.createElement('button'); b.className='info'; b.setAttribute('aria-label','この練習のねらいを見る');
+  b.innerHTML='<svg viewBox="0 0 20 20" aria-hidden="true"><circle cx="10" cy="10" r="8.25" fill="none" stroke="currentColor" stroke-width="1.5"/><circle cx="10" cy="6.2" r="1.1" fill="currentColor"/><path d="M10 9v5.2" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg>';
+  b.onclick=()=>openSheet(el.dataset.id,b);
+  const h=el.querySelector('.drill-head h3'), bd=h.querySelector('.badge'); h.insertBefore(b,bd);
 });
 $('dxbanner-b').onclick=()=>{dx={}; go('intro');};
 function sortedDays(){return Object.values(S.days).filter(d=>d.total!=null||d.yawn).sort((a,b)=>a.date<b.date?-1:1);}
