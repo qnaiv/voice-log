@@ -478,7 +478,7 @@ const keyOf=d=>d.toLocaleDateString('sv-SE');
 const todayKey=()=>keyOf(new Date());
 const VOWELS=[['a','あ'],['i','い'],['u','う'],['e','え'],['o','お']];
 const LEAK_T=1.0, BLOCK_T=4.0, REDIAG_DAYS=30, DX_V=2;
-const APP_VERSION='20261021-1027';
+const APP_VERSION='20261021-1029';
 const TYPE_LABEL={ok:'問題なし',open:'開鼻声タイプ',closed:'閉鼻声タイプ',mixed:'混合タイプ'};
 const TYPE_SHORT={ok:'問題なし',open:'開鼻声',closed:'閉鼻声',mixed:'混合'};
 const DRILL_NAME={breath:'ロングブレス',yawn:'あくび喉',kaga:'「カ・ガ」連打',nasal:'鼻つまみチェック',vowel:'母音マップ'};
@@ -502,10 +502,10 @@ function menuFor(type,gs){
   const by=id=>m.find(x=>x.id===id);
   const addKaga=why=>{if(!by('kaga')) m.splice(2,0,{id:'kaga',badge:'追加',why});};
   const tname=type==='mixed'?'混合タイプ':'開鼻声タイプ';
-  if(type==='open'||type==='mixed'){by('yawn').badge='強化'; by('yawn').x2=true; by('yawn').why=`${tname}と診断されたため、2セット（60秒）にしています。`; addKaga(`${tname}と診断されたため追加しています。軟口蓋を素早く持ち上げる力をつけます。`);}
+  if(type==='open'||type==='mixed'){by('yawn').badge='重点'; by('yawn').x2=true; by('yawn').why=`${tname}と診断されたため、2セット（60秒）にしています。`; addKaga(`${tname}と診断されたため追加しています。軟口蓋を素早く持ち上げる力をつけます。`);}
   if(type==='closed'||type==='mixed'){by('nasal').rest=true; by('nasal').badge='お休み';}
-  if(gs.includes('volume')&&!by('breath').badge){by('breath').badge='強化'; by('breath').why='目的に「通る声・声量」を選んだため強化しています。声量の土台は息の量のコントロールです。';}
-  if(gs.includes('artic')){if(!by('vowel').badge){by('vowel').badge='強化'; by('vowel').why='目的に「滑舌」を選んだため強化しています。母音の形がはっきりすると言葉が聞き取りやすくなります。';} addKaga('目的に「滑舌」を選んだため追加しています。');}
+  if(gs.includes('volume')&&!by('breath').badge){by('breath').badge='重点'; by('breath').why='目的に「通る声・声量」を選んだため重点にしています。声量の土台は息の量のコントロールです。';}
+  if(gs.includes('artic')){if(!by('vowel').badge){by('vowel').badge='重点'; by('vowel').why='目的に「滑舌」を選んだため重点にしています。母音の形がはっきりすると言葉が聞き取りやすくなります。';} addKaga('目的に「滑舌」を選んだため追加しています。');}
   return m;
 }
 const activeMenu=()=>menuFor(curType(),goals()).filter(x=>!x.rest);
