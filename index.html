@@ -438,6 +438,16 @@ nav.tabbar button[aria-current="page"]{color:var(--accent);font-weight:700}
     <p class="small muted" id="dg-ver"></p>
     <div><button class="ghost" id="dg-edit">声の高さ・目的を変更</button></div>
   </div>
+  <div class="card">
+    <h2>リセット</h2>
+    <p class="small muted">練習の記録・診断の結果・設定をすべて消して、最初の設定画面からやり直します。</p>
+    <div><button class="ghost" id="rs-ask" style="color:var(--bad);border-color:color-mix(in srgb,var(--bad) 45%,transparent)">すべてのデータを消す</button></div>
+    <div class="warn" id="rs-confirm" hidden>
+      <b>本当に消しますか？</b>
+      <p>消したデータは元に戻せません。残しておきたい場合は、先に書き出してください。</p>
+      <div class="row"><button class="ghost" id="rs-export">先に書き出す</button><button class="btn" id="rs-do" style="background:var(--bad)">消す</button><button class="link" id="rs-cancel">やめる</button></div>
+    </div>
+  </div>
 </section>
 
 </div>
@@ -468,7 +478,7 @@ const keyOf=d=>d.toLocaleDateString('sv-SE');
 const todayKey=()=>keyOf(new Date());
 const VOWELS=[['a','あ'],['i','い'],['u','う'],['e','え'],['o','お']];
 const LEAK_T=1.0, BLOCK_T=4.0, REDIAG_DAYS=30, DX_V=2;
-const APP_VERSION='20261021-1026';
+const APP_VERSION='20261021-1027';
 const TYPE_LABEL={ok:'問題なし',open:'開鼻声タイプ',closed:'閉鼻声タイプ',mixed:'混合タイプ'};
 const TYPE_SHORT={ok:'問題なし',open:'開鼻声',closed:'閉鼻声',mixed:'混合'};
 const DRILL_NAME={breath:'ロングブレス',yawn:'あくび喉',kaga:'「カ・ガ」連打',nasal:'鼻つまみチェック',vowel:'母音マップ'};
@@ -1230,6 +1240,14 @@ function renderDiag(){
   $('dg-settings').textContent=`声の高さ：${S.settings.pitch==='high'?'高め':'低め'}${S.settings.f0?`（${S.settings.f0} Hz）`:''}　目的：${goals().map(g=>GOAL_NAME[g]).join('・')||'未設定'}`;
 }
 $('dg-edit').textContent='声の高さ・目的を変更'; $('dg-edit').onclick=()=>{obEdit=true; go('onboard');};
+$('rs-ask').onclick=()=>{$('rs-confirm').hidden=false; $('rs-ask').hidden=true; $('rs-confirm').scrollIntoView({block:'center',behavior:'smooth'});};
+$('rs-cancel').onclick=()=>{$('rs-confirm').hidden=true; $('rs-ask').hidden=false;};
+$('rs-export').onclick=()=>$('bk-export').click();
+$('rs-do').onclick=()=>{
+  try{['voicelog.days','voicelog.settings','voicelog.diags'].forEach(k=>localStorage.removeItem(k)); sessionStorage.removeItem('voicelog.updTried');}catch(e){}
+  S.days={}; S.settings={}; S.diags=[]; kagaViz=null; nasalTmp={};
+  $('rs-confirm').hidden=true; $('rs-ask').hidden=false; go('onboard');
+};
 
 /* ---------- backup ---------- */
 $('bk-export').onclick=()=>{
