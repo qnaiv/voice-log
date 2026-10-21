@@ -209,7 +209,7 @@ nav.tabbar button[aria-current="page"]{color:var(--accent);font-weight:700}
   <div class="card">
     <h3>練習の目的 <span class="small muted" style="font-weight:400">（複数選べます）</span></h3>
     <div style="display:flex;flex-direction:column;gap:8px" id="ob-goals">
-      <button class="opt" data-v="nasal" aria-pressed="false"><span class="box"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12l5 5 9-10"/></svg></span><span class="lbl">鼻声を直したい<small>こもる・鼻にかかると言われる</small></span></button>
+      <button class="opt" data-v="nasal" aria-pressed="false"><span class="box"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12l5 5 9-10"/></svg></span><span class="lbl">鼻声を直したい<small>声がこもる・鼻にかかっている気がする</small></span></button>
       <button class="opt" data-v="artic" aria-pressed="false"><span class="box"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12l5 5 9-10"/></svg></span><span class="lbl">滑舌をよくしたい<small>聞き返される・言葉がつぶれる</small></span></button>
       <button class="opt" data-v="volume" aria-pressed="false"><span class="box"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12l5 5 9-10"/></svg></span><span class="lbl">通る声・声量がほしい<small>声が小さい・語尾が消える</small></span></button>
     </div>
@@ -227,7 +227,7 @@ nav.tabbar button[aria-current="page"]{color:var(--accent);font-weight:700}
   </div>
   <div class="steplist">
     <div class="card"><div class="step">1</div><div style="display:flex;flex-direction:column;gap:2px"><h3>抜けチェック</h3><p class="small muted">短い文を普通に・鼻をつまんで読みます。息が鼻に抜けていないかを見ます。</p></div></div>
-    <div class="card"><div class="step">2</div><div style="display:flex;flex-direction:column;gap:2px"><h3>詰まりチェック</h3><p class="small muted">「んー」とハミングして、鼻の通り道がふさがっていないかを見ます。</p></div></div>
+    <div class="card"><div class="step">2</div><div style="display:flex;flex-direction:column;gap:2px"><h3>詰まりチェック</h3><p class="small muted">マ行・ナ行の多い文を読んで、鼻の通り道がふさがっていないかを見ます。</p></div></div>
     <div class="card"><div class="step">3</div><div style="display:flex;flex-direction:column;gap:2px"><h3>問診</h3><p class="small muted">鼻づまりの頻度や口呼吸について、タップで5問答えます。</p></div></div>
   </div>
   <div class="notice">静かな場所で、スマホを口から20cmほど離して持ってください。これは医療的な診断ではなく、練習の方向を決めるための傾向チェックです。</div>
@@ -256,16 +256,16 @@ nav.tabbar button[aria-current="page"]{color:var(--accent);font-weight:700}
 <section class="view" id="v-block" hidden>
   <div class="progress"><div class="meta"><b>テスト2 / 3</b><span>詰まりチェック</span></div><div class="bars"><i class="on"></i><i class="on"></i><i></i></div></div>
   <div style="display:flex;flex-direction:column;gap:6px">
-    <h2 style="font-size:21px">ハミングと「まみむめも」</h2>
+    <h2 style="font-size:21px">マ行・ナ行の文を2回読んでください</h2>
     <p class="small muted">今度は鼻を通る音です。鼻が通っていれば、鼻をつまんだとき音が大きく変わります。1回5秒です。</p>
   </div>
-  <div class="card" style="align-items:center;gap:4px"><div style="font-size:24px;font-weight:700;letter-spacing:.08em">んーー → まみむめも</div><div class="small muted">「んー」は口を閉じて3秒ほど</div></div>
+  <div class="card bigsentence">ママとナナが<br>メロンを見る</div>
   <div class="card">
     <div class="recrow" id="bk-row1"><div class="st"><h3>① 普通に</h3><span>まだ録音していません</span></div><button class="rec" id="bl-1"><span class="dot"></span><span>録音</span></button></div>
     <div class="recrow" id="bk-row2"><div class="st"><h3>② 鼻をつまんで</h3><span>まだ録音していません</span></div><button class="rec" id="bl-2"><span class="dot"></span><span>録音</span></button></div>
     <div class="row"><div class="meter"><i id="bl-m"></i></div><span class="timer" id="bl-t">5.0s</span></div>
   </div>
-  <div class="banner"><p class="small">鼻をつまんだときに苦しくなったら、すぐ離して大丈夫です。</p></div>
+  <div class="banner"><p class="small">鼻をつまむと、こもった声になるのが正常です（鼻が通っている証拠）。息は口から吸って大丈夫です。</p></div>
   <button class="btn block" id="bl-next" disabled>次へ（問診）</button>
   <button class="link" data-go="intro">やめる</button>
 </section>
@@ -707,9 +707,9 @@ $('bl-next').onclick=()=>go('ask');
 const QS=[
   {id:'q1',label:'鼻づまりはどのくらい？',opts:['ほぼない','ときどき','よくある']},
   {id:'q2',label:'季節によって悪くなる？',opts:['はい','いいえ','わからない']},
-  {id:'q3',label:'口呼吸を指摘されたことがある？',opts:['ない','ある','わからない']},
-  {id:'q4',label:'いびきをかくと言われる？',opts:['いいえ','ときどき','よく']},
-  {id:'q5',label:'声がこもる・鼻にかかると言われる？',opts:['いいえ','ときどき','よく']}
+  {id:'q3',label:'朝起きたとき、口や喉が乾いている？',opts:['ほぼない','ときどき','よくある']},
+  {id:'q4',label:'鼻をかんでも、すぐまた詰まる？',opts:['いいえ','ときどき','よくある']},
+  {id:'q5',label:'録音した自分の声、こもって聞こえる？',opts:['いいえ','少し','かなり']}
 ];
 function renderAsk(){
   dx.ans=dx.ans||{}; const box=$('qs'); box.innerHTML='';
@@ -726,7 +726,8 @@ function renderAsk(){
 }
 function typeOf(leak,block,ans){
   const leaky=leak>LEAK_T;
-  const blocked=block<BLOCK_T||(ans&&ans.q1===2&&block<BLOCK_T+2);
+  const stuffy=ans&&(ans.q1===2||ans.q4===2);
+  const blocked=block<BLOCK_T||(stuffy&&block<BLOCK_T+2);
   return leaky&&blocked?'mixed':leaky?'open':blocked?'closed':'ok';
 }
 $('ask-next').onclick=()=>{
@@ -754,7 +755,7 @@ function renderResult(rec){
   if(needDoc){
     let t='このタイプは発声練習だけでは変わりにくく、鼻の状態を整えると声も変わりやすくなります。';
     if(rec.answers&&rec.answers.q2===0) t+='季節で悪くなると回答されたので、受診時に伝えると相談がスムーズです。';
-    else if(rec.answers&&rec.answers.q1===2) t+='鼻づまりがよくあると回答されたので、受診時に伝えると相談がスムーズです。';
+    else if(rec.answers&&(rec.answers.q1===2||rec.answers.q4===2)) t+='鼻づまりがよくあると回答されたので、受診時に伝えると相談がスムーズです。';
     $('rs-warn-t').textContent=t;
   }
   const x=clamp((12-rec.block)/12,0.1,0.82)*100, y=clamp(1-rec.leak/4,0.14,0.76)*100;
