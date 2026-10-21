@@ -243,16 +243,17 @@ nav.tabbar button[aria-current="page"]{color:var(--accent);font-weight:700}
 <section class="view" id="v-leak" hidden>
   <div class="progress"><div class="meta"><b>テスト1 / 3</b><span>抜けチェック</span></div><div class="bars"><i class="on"></i><i></i><i></i></div></div>
   <div style="display:flex;flex-direction:column;gap:6px">
-    <h2 style="font-size:21px">下の文を2回読んでください</h2>
-    <p class="small muted">ナ行・マ行のない文です。鼻に息が抜けていなければ、鼻をつまんでも音はほとんど変わりません。1回4秒です。</p>
+    <h2 style="font-size:21px">下の文を3回読んでください</h2>
+    <p class="small muted">ナ行・マ行のない文です。鼻に息が抜けていなければ、鼻をつまんでも音はほとんど変わりません。③は「読むたびに自然に出る違い」を測るための基準です。1回4秒です。</p>
   </div>
   <div class="card bigsentence">アヒルがさわぐ<br>カラスがかえる</div>
   <div class="card">
     <div class="recrow" id="lk-row1"><div class="st"><h3>① 普通に読む</h3><span>まだ録音していません</span></div><button class="rec" id="lk-1"><span class="dot"></span><span>録音</span></button></div>
     <div class="recrow" id="lk-row2"><div class="st"><h3>② 鼻をつまんで読む</h3><span>まだ録音していません</span></div><button class="rec" id="lk-2"><span class="dot"></span><span>録音</span></button></div>
+    <div class="recrow" id="lk-row3"><div class="st"><h3>③ もう一度、普通に読む</h3><span>まだ録音していません</span></div><button class="rec" id="lk-3"><span class="dot"></span><span>録音</span></button></div>
     <div class="row"><div class="meter"><i id="lk-m"></i></div><span class="timer" id="lk-t">4.0s</span></div>
   </div>
-  <p class="small muted" id="lk-msg" style="text-align:center">2回とも録音すると、自動で次のテストへ進みます</p>
+  <p class="small muted" id="lk-msg" style="text-align:center">3回とも録音すると、自動で次のテストへ進みます</p>
   <button class="link" data-go="intro">やめる</button>
 </section>
 
@@ -261,7 +262,7 @@ nav.tabbar button[aria-current="page"]{color:var(--accent);font-weight:700}
   <div class="progress"><div class="meta"><b>テスト2 / 3</b><span>詰まりチェック</span></div><div class="bars"><i class="on"></i><i class="on"></i><i></i></div></div>
   <div style="display:flex;flex-direction:column;gap:6px">
     <h2 style="font-size:21px">マ行・ナ行の文を2回読んでください</h2>
-    <p class="small muted">今度は鼻を通る音です。鼻が通っていれば、鼻をつまんだとき音が大きく変わります。1回5秒です。</p>
+    <p class="small muted">今度は鼻を通る音です。鼻が通っていれば、鼻をつまんだとき「マ」「ナ」の音が途切れます。1回5秒です。</p>
   </div>
   <div class="card bigsentence">ママとナナが<br>メロンを見る</div>
   <div class="card">
@@ -435,8 +436,8 @@ const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
 const keyOf=d=>d.toLocaleDateString('sv-SE');
 const todayKey=()=>keyOf(new Date());
 const VOWELS=[['a','あ'],['i','い'],['u','う'],['e','え'],['o','お']];
-const LEAK_T=2.0, BLOCK_T=6.0, REDIAG_DAYS=30;
-const APP_VERSION='20261021-0939';
+const LEAK_T=1.0, BLOCK_T=4.0, REDIAG_DAYS=30, DX_V=2;
+const APP_VERSION='20261021-0948';
 const TYPE_LABEL={ok:'問題なし',open:'開鼻声タイプ',closed:'閉鼻声タイプ',mixed:'混合タイプ'};
 const TYPE_SHORT={ok:'問題なし',open:'開鼻声',closed:'閉鼻声',mixed:'混合'};
 const DRILL_NAME={breath:'ロングブレス',yawn:'あくび喉',kaga:'「カ・ガ」連打',nasal:'鼻つまみチェック',vowel:'母音マップ'};
@@ -687,6 +688,34 @@ function ltas(x,sr){
   const m=bands.reduce((a,b)=>a+b,0)/bands.length; return bands.map(b=>b-m);
 }
 const specDiff=(a,b)=>a.reduce((s,v,i)=>s+Math.abs(v-b[i]),0)/a.length;
+/* voice "tone": average spectrum of the loud (voiced) frames in 1/3-octave bands 200–4000 Hz.
+   Wide bands ignore pitch harmonics, which otherwise make two readings differ by ~3 dB on their own. */
+function toneSpec(x,sr){
+  const {y,sr:s}=decimate(x,sr,16000); const N=512,H=160;
+  const fr=[]; for(let i=0;i+N<=y.length;i+=H){let q=0; for(let j=0;j<N;j++) q+=y[i+j]*y[i+j]; fr.push([i,q]);}
+  const mx=Math.max(...fr.map(f=>f[1]),0); if(mx<=0) return null;
+  const pow=new Float64Array(N/2); let cnt=0;
+  fr.forEach(([st,q])=>{ if(q<mx*0.003) return; const re=new Float64Array(N),im=new Float64Array(N);   // within 25 dB of the loudest
+    for(let j=0;j<N;j++) re[j]=y[st+j]*(0.5-0.5*Math.cos(2*Math.PI*j/(N-1))); fft(re,im);
+    for(let k=0;k<N/2;k++) pow[k]+=re[k]*re[k]+im[k]*im[k]; cnt++; });
+  if(cnt<10) return null;
+  const out=[]; for(let b=0;b<13;b++){const f0=200*Math.pow(2,b/3), f1=200*Math.pow(2,(b+1)/3);
+    const k0=Math.max(1,Math.floor(f0*N/s)), k1=Math.max(k0+1,Math.floor(f1*N/s)); let q=0; for(let k=k0;k<k1;k++) q+=pow[k]; out.push(10*Math.log10(q/(k1-k0)+1e-12));}
+  const m=out.reduce((a,b)=>a+b,0)/out.length; return out.map(v=>v-m);
+}
+/* share of the reading (from first to last sound) where the low, voiced band (80–400 Hz) drops out.
+   Read normally, "ma/na" keep humming through the nose; pinched with an open nose, they break off. */
+function gapRatio(x,sr){
+  const {y,sr:s}=decimate(x,sr,16000); const N=512,H=160; const k0=Math.floor(80*N/s), k1=Math.ceil(400*N/s);
+  const e=[]; for(let i=0;i+N<=y.length;i+=H){const re=new Float64Array(N),im=new Float64Array(N);
+    for(let j=0;j<N;j++) re[j]=y[i+j]*(0.5-0.5*Math.cos(2*Math.PI*j/(N-1))); fft(re,im);
+    let q=0; for(let k=k0;k<=k1;k++) q+=re[k]*re[k]+im[k]*im[k]; e.push(10*Math.log10(q+1e-12));}
+  if(!e.length) return null; const top=Math.max(...e); if(top<-40) return null;
+  let a=e.findIndex(v=>v>top-30), b=e.length-1; while(b>a&&e[b]<=top-30) b--;
+  const seg=e.slice(a,b+1); if(seg.length<30) return null;
+  const med=[...seg].sort((p,q)=>p-q)[Math.floor(seg.length/2)];
+  return seg.filter(v=>v<med-15).length/seg.length;
+}
 /* loudness of the louder 30% of a take, in dB */
 function levelDb(x,sr){const r=frameRms(x,sr,0.02).sort((a,b)=>b-a); const n=Math.max(1,Math.floor(r.length*0.3)); const m=r.slice(0,n).reduce((a,b)=>a+b,0)/n; return 20*Math.log10(m+1e-9);}
 function vowelArea(v){const order=['i','e','a','o','u']; if(!order.every(k=>v[k])) return null;
@@ -746,35 +775,36 @@ let dx={};
 $('in-start').onclick=()=>{dx={}; go('leak');};
 $('in-later').onclick=()=>go('today');
 function setRow(id,done,text){const r=$(id); r.classList.toggle('done',done); r.querySelector('span').textContent=text; r.querySelector('button span:last-child').textContent=done?'録り直す':'録音';}
-function resetLeak(){setRow('lk-row1',!!dx.l1,dx.l1?'録音できました':'まだ録音していません'); setRow('lk-row2',!!dx.l2,dx.l2?'録音できました':'まだ録音していません'); $('lk-msg').textContent='2回とも録音すると、自動で次のテストへ進みます'; $('lk-msg').className='small muted';}
+function resetLeak(){[1,2,3].forEach(n=>setRow('lk-row'+n,!!dx['l'+n],dx['l'+n]?'録音できました':'まだ録音していません')); $('lk-msg').textContent='3回とも録音すると、自動で次のテストへ進みます'; $('lk-msg').className='small muted';}
 async function leakRec(n){
   const btn=$('lk-'+n);
   const out=await capture(btn,{maxSec:4,countdown:true},$('lk-m'),$('lk-t'),'録音中'); $('lk-t').textContent='4.0s';
   if(!out) return;
-  const sp=ltas(out.x,out.sr);
+  const sp=toneSpec(out.x,out.sr);
   if(!sp){$('lk-msg').textContent='声が小さく聞き取れませんでした。もう少し大きめにもう一度どうぞ。'; $('lk-msg').className='small'; return;}
   dx['l'+n]=sp; setRow('lk-row'+n,true,'録音できました');
-  if(dx.l1&&dx.l2){
-    dx.leak=+specDiff(dx.l1,dx.l2).toFixed(2);
+  if(dx.l1&&dx.l2&&dx.l3){
+    /* how much more pinching changes the tone than simply reading it again */
+    const pinch=(specDiff(dx.l1,dx.l2)+specDiff(dx.l3,dx.l2))/2, again=specDiff(dx.l1,dx.l3);
+    dx.leak=+Math.max(0,pinch-again).toFixed(2); dx.leakRaw={pinch:+pinch.toFixed(2),again:+again.toFixed(2)};
     $('lk-msg').textContent='テスト1 完了'; $('lk-msg').className='donebox';
     setTimeout(()=>{if(view==='leak') go('block');},1000);
   }
 }
-$('lk-1').onclick=()=>leakRec(1); $('lk-2').onclick=()=>leakRec(2);
-function resetBlock(){setRow('bk-row1',!!dx.b1,dx.b1?'録音できました':'まだ録音していません'); setRow('bk-row2',!!dx.b2,dx.b2?'録音できました':'まだ録音していません'); $('bl-next').disabled=!(dx.b1&&dx.b2);}
+$('lk-1').onclick=()=>leakRec(1); $('lk-2').onclick=()=>leakRec(2); $('lk-3').onclick=()=>leakRec(3);
+function resetBlock(){[1,2].forEach(n=>setRow('bk-row'+n,dx['b'+n]!=null,dx['b'+n]!=null?'録音できました':'まだ録音していません')); $('bl-next').disabled=!(dx.b1!=null&&dx.b2!=null);}
 async function blockRec(n){
   const btn=$('bl-'+n);
-  const out=await capture(btn,{maxSec:5,countdown:true},$('bl-m'),$('bl-t'),'録音中'); $('bl-t').textContent='5.0s';
+  const out=await capture(btn,{maxSec:5,countdown:true,clean:true},$('bl-m'),$('bl-t'),'録音中'); $('bl-t').textContent='5.0s';
   if(!out) return;
-  const lv=levelDb(out.x,out.sr), sp=ltas(out.x,out.sr);
-  if(n===1&&!sp){setRow('bk-row1',false,'声が小さく聞き取れませんでした。もう一度どうぞ'); return;}
-  dx['b'+n]={lv,sp}; setRow('bk-row'+n,true,'録音できました');
-  if(dx.b1&&dx.b2){
-    const spec=dx.b2.sp?specDiff(dx.b1.sp,dx.b2.sp):6; // pinched take too quiet to read = sound was cut off
-    const drop=Math.max(0,dx.b1.lv-dx.b2.lv);
-    dx.block=+(spec+drop*0.5).toFixed(1);
+  const g=gapRatio(out.x,out.sr);
+  if(g==null){setRow('bk-row'+n,false,'声が小さく聞き取れませんでした。もう一度どうぞ'); return;}
+  dx['b'+n]=g; setRow('bk-row'+n,true,'録音できました');
+  if(dx.b1!=null&&dx.b2!=null){
+    /* percentage points of extra break-off when pinched: open nose → clearly more; blocked nose → about the same */
+    dx.block=+((dx.b2-dx.b1)*100).toFixed(1); dx.blockRaw={normal:+(dx.b1*100).toFixed(1),pinched:+(dx.b2*100).toFixed(1)};
   }
-  $('bl-next').disabled=!(dx.b1&&dx.b2);
+  $('bl-next').disabled=!(dx.b1!=null&&dx.b2!=null);
 }
 $('bl-1').onclick=()=>blockRec(1); $('bl-2').onclick=()=>blockRec(2);
 $('bl-next').onclick=()=>go('ask');
@@ -807,7 +837,7 @@ function typeOf(leak,block,ans){
 }
 $('ask-next').onclick=()=>{
   const type=typeOf(dx.leak,dx.block,dx.ans);
-  const rec={date:todayKey(),leak:dx.leak,block:dx.block,type,answers:dx.ans};
+  const rec={date:todayKey(),v:DX_V,leak:dx.leak,block:dx.block,leakRaw:dx.leakRaw,blockRaw:dx.blockRaw,type,answers:dx.ans};
   S.diags=S.diags.filter(d=>d.date!==rec.date); S.diags.push(rec); saveDiags();
   const d=S.days[todayKey()]; if(d){d.total=totalOf(d); saveDays();}
   renderResult(rec); go('result');
@@ -818,6 +848,10 @@ const TYPE_DESC={
   closed:'鼻の通り道がふさがり気味で、「ま」「な」などの鼻に響く音がこもっています。',
   mixed:'息が鼻に抜けやすい一方で、鼻の通りもやや悪い状態です。'
 };
+function dxCards(d){
+  return metricCard('息の抜け',d.leak,'dB','鼻をつまんだときの声の変わり方（読み直しとの差）。目安 1dB以下',d.leak<=LEAK_T,'良好','やや多い')+
+    metricCard('鼻の通り',(d.block>0?'+':'')+d.block,'%','鼻をつまむと「マ」「ナ」が途切れる割合の増え方。目安 +4%以上',d.block>=BLOCK_T,'良好','詰まり気味');
+}
 function metricCard(label,val,unit,target,ok,okText,ngText){
   return `<div class="mcard"><span class="small muted" style="font-size:12px">${label}</span><span class="v">${val}<small> ${unit}</small></span><span class="small muted" style="font-size:11px">${target}</span><span class="grade ${ok?'g-good':'g-mid'}">${ok?okText:ngText}</span></div>`;
 }
@@ -833,11 +867,10 @@ function renderResult(rec){
     else if(rec.answers&&(rec.answers.q1===2||rec.answers.q4===2)) t+='鼻づまりがよくあると回答されたので、受診時に伝えると相談がスムーズです。';
     $('rs-warn-t').textContent=t;
   }
-  const x=clamp((12-rec.block)/12,0.1,0.82)*100, y=clamp(1-rec.leak/4,0.14,0.76)*100;
+  const x=clamp((8-rec.block)/8,0.1,0.82)*100, y=clamp(1-rec.leak/2,0.14,0.76)*100;
   $('rs-dot').style.left=x+'%'; $('rs-dot').style.top=y+'%';
   $('rs-you').style.left=x+'%'; $('rs-you').style.top=y+'%'; $('rs-you').classList.toggle('up',y>70); $('rs-you').classList.toggle('left',y<=70&&x>60);
-  $('rs-metrics').innerHTML=metricCard('息の抜け',rec.leak,'dB','目安 2dB以下',rec.leak<=LEAK_T,'良好','やや多い')+
-    metricCard('鼻の通り',rec.block,'dB','目安 6dB以上の変化',rec.block>=BLOCK_T,'良好','詰まり気味');
+  $('rs-metrics').innerHTML=dxCards(rec);
   const m=menuFor(rec.type,goals());
   $('rs-menu-h').textContent=needDoc?'いまできるメニュー':'あなた向けの毎日のメニュー';
   $('rs-menu').innerHTML=m.map(it=>{
@@ -1052,12 +1085,13 @@ function renderDiag(){
     const change=prev&&prev.type!==ld.type?`<span class="grade ${ld.type==='ok'?'g-good':'g-mid'}">${TYPE_SHORT[prev.type]}から変化</span>`:'';
     const due=new Date(ld.date+'T00:00'); due.setDate(due.getDate()+REDIAG_DAYS);
     now.innerHTML=`<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px"><div style="display:flex;flex-direction:column"><span class="small muted">いまのタイプ（${ld.date.slice(5).replace('-','/')} 診断）</span><span style="font-size:20px;font-weight:700">${TYPE_LABEL[ld.type]}</span></div>${change}</div>
-      <div class="mcards">${metricCard('息の抜け',ld.leak,'dB','目安 2dB以下',ld.leak<=LEAK_T,'良好','やや多い')}${metricCard('鼻の通り',ld.block,'dB','目安 6dB以上の変化',ld.block>=BLOCK_T,'良好','詰まり気味')}</div>
+      ${ld.v===DX_V?`<div class="mcards">${dxCards(ld)}</div>`:'<p class="tip">この結果は判定方法を見直す前のものです。再診断すると、新しい方法の結果に置き換わります。</p>'}
       <button class="btn block" id="dg-run">いま再診断する</button><p class="small muted" style="text-align:center">次の再診断の目安：${keyOf(due).slice(5).replace('-','/')}（30日ごと）</p>`;
   }
   $('dg-run').onclick=()=>{dx={}; go('intro');};
-  $('dg-chart').innerHTML=lineChart([{get:d=>d.leak,color:'var(--ochre)',w:3}],{rows:S.diags,yMax:Math.max(5,Math.ceil(Math.max(0,...S.diags.map(d=>d.leak)))),unit:'dB',ref:LEAK_T,empty:'診断すると、ここに息の抜けの推移が描かれます。'});
-  $('dg-list').innerHTML=S.diags.length?S.diags.slice().reverse().map(d=>`<div class="dxrow"><span class="num small">${d.date.slice(5).replace('-','/')}</span><b style="font-size:14px">${TYPE_SHORT[d.type]}</b><span class="small muted">抜け${d.leak} ・ 通り${d.block}</span></div>`).join(''):'<p class="empty">履歴はまだありません。</p>';
+  const nd=S.diags.filter(d=>d.v===DX_V);
+  $('dg-chart').innerHTML=lineChart([{get:d=>d.leak,color:'var(--ochre)',w:3}],{rows:nd,yMax:Math.max(3,Math.ceil(Math.max(0,...nd.map(d=>d.leak)))),unit:'dB',ref:LEAK_T,empty:'診断すると、ここに息の抜けの推移が描かれます。'});
+  $('dg-list').innerHTML=S.diags.length?S.diags.slice().reverse().map(d=>`<div class="dxrow"><span class="num small">${d.date.slice(5).replace('-','/')}</span><b style="font-size:14px">${TYPE_SHORT[d.type]}</b><span class="small muted">${d.v===DX_V?`抜け${d.leak}dB ・ 通り${d.block>0?'+':''}${d.block}%`:'旧方式'}</span></div>`).join(''):'<p class="empty">履歴はまだありません。</p>';
   $('dg-settings').textContent=`声の高さ：${S.settings.pitch==='high'?'高め':'低め'}${S.settings.f0?`（${S.settings.f0} Hz）`:''}　目的：${goals().map(g=>GOAL_NAME[g]).join('・')||'未設定'}`;
 }
 $('dg-edit').textContent='声の高さ・目的を変更'; $('dg-edit').onclick=()=>{obEdit=true; go('onboard');};
