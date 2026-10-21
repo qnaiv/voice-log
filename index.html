@@ -555,18 +555,40 @@ function analyzeBreath(x,sr,calNoise){
   const stab=clamp(1-(sd/m)*1.5,0,1);
   return {sec:+sec.toFixed(1),stab:Math.round(stab*100),score:Math.round(Math.min(sec/30,1)*60+stab*40)};
 }
-/* syllable onsets in "kakaka…" from a smoothed loudness envelope with hysteresis */
+/* syllable rate in "kakaka…": rhythm of the loudness envelope (dB).
+   Fast speech barely dips between syllables, so count by periodicity + small local dips, not by absolute thresholds. */
 function analyzeKaga(x,sr){
-  const r=frameRms(x,sr,0.01); if(r.length<20) return null;
-  const sm=r.map((v,i)=>(r[i-1]??v)*0.25+v*0.5+(r[i+1]??v)*0.25);
-  const sorted=[...sm].sort((a,b)=>a-b); const lo0=sorted[Math.floor(sorted.length*0.1)], hi0=sorted[Math.floor(sorted.length*0.95)];
-  if(hi0<0.004) return null;
-  const hi=lo0+(hi0-lo0)*0.45, lo=lo0+(hi0-lo0)*0.22;
-  const on=[]; let up=false, last=-99;
-  sm.forEach((v,i)=>{ if(!up&&v>hi&&i-last>=5){up=true; on.push(i); last=i;} else if(up&&v<lo){up=false;} });
-  if(on.length<3) return null;
-  const dur=(on[on.length-1]-on[0])*0.01; const rate=(on.length-1)/dur;
-  return {count:on.length,rate:+rate.toFixed(1),score:Math.round(clamp(rate/6*100,0,100))};
+  const hop=0.01; const r=frameRms(x,sr,hop); if(r.length<100) return null;
+  const db=r.map(v=>20*Math.log10(v+1e-7));
+  const top=[...db].sort((a,b)=>b-a)[Math.floor(db.length*0.02)];
+  if(top<-58) return null;
+  const sm=db.map((v,i)=>((db[i-1]??v)+v+(db[i+1]??v))/3);
+  const act=sm.map(v=>v>top-16);
+  const a0=act.indexOf(true), a1=act.lastIndexOf(true);
+  if(a0<0||(a1-a0)*hop<1.2) return null;
+  const seg=sm.slice(a0,a1+1).map(v=>Math.max(v,top-30));
+  const m=seg.reduce((a,b)=>a+b,0)/seg.length; const e=seg.map(v=>v-m);
+  const e0=e.reduce((a,b)=>a+b*b,0); if(e0<=0||Math.sqrt(e0/e.length)<1.2) return null; // a held vowel barely moves
+  const minLag=Math.round(1/14/hop), maxLag=Math.round(1/1.5/hop);
+  const ac=[]; for(let L=0;L<=maxLag+1;L++){let s=0; for(let i=0;i+L<e.length;i++) s+=e[i]*e[i+L]; ac.push(s/e0);}
+  let best=-1; for(let L=minLag;L<=maxLag;L++) if(ac[L]>ac[L-1]&&ac[L]>=ac[L+1]&&ac[L]>best) best=ac[L];
+  if(best<0.15) return null;
+  let lag=0; for(let L=minLag;L<=maxLag;L++) if(ac[L]>ac[L-1]&&ac[L]>=ac[L+1]&&ac[L]>=best*0.8){lag=L;break;}
+  const dur=seg.length*hop; const rate=1/(lag*hop);
+  /* peaks at least ~0.6 period apart with a 1.5 dB dip before them */
+  const minD=Math.max(1,Math.round(lag*0.6)); const pk=[]; let lowSince=Infinity;
+  for(let i=1;i<seg.length-1;i++){
+    lowSince=Math.min(lowSince,seg[i]);
+    if(seg[i]>=seg[i-1]&&seg[i]>seg[i+1]&&seg[i]-lowSince>=1.5){
+      if(pk.length&&i-pk[pk.length-1]<minD){ if(seg[i]>seg[pk[pk.length-1]]) pk[pk.length-1]=i; }
+      else{pk.push(i); lowSince=Infinity;}
+    }
+  }
+  let count=pk.length;
+  if(Math.abs(count-rate*dur)>rate*dur*0.3) count=Math.round(rate*dur);
+  if(count<4) return null;
+  const rr=+rate.toFixed(1);
+  return {count,rate:rr,score:Math.round(clamp(rr/6*100,0,100))};
 }
 function decimate(x,sr,target){const f=Math.max(1,Math.round(sr/target)); if(f===1) return {y:x,sr}; const n=Math.floor(x.length/f); const y=new Float32Array(n); for(let i=0;i<n;i++){let s=0; for(let j=0;j<f;j++) s+=x[i*f+j]; y[i]=s/f;} return {y,sr:sr/f};}
 function lpc(fr,p){const r=new Float64Array(p+1); for(let k=0;k<=p;k++){let s=0; for(let i=k;i<fr.length;i++) s+=fr[i]*fr[i-k]; r[k]=s;} if(r[0]<=0) return null; r[0]*=1.0001;
@@ -798,7 +820,7 @@ $('r-kaga').onclick=async()=>{
   const out=await capture($('r-kaga'),{maxSec:10,countdown:true},$('m-kaga'),$('t-kaga'),'止める'); $('t-kaga').textContent='10.0s';
   if(!out) return;
   const r=analyzeKaga(out.x,out.sr);
-  if(!r){showMsg('o-kaga','「カ」の区切りが聞き取れませんでした。1音ずつはっきり、少し大きめにどうぞ。');return;}
+  if(!r){showMsg('o-kaga','「カカカ」のリズムが読み取れませんでした。息継ぎはしてOKなので、同じペースで3秒以上続けてみてください。');return;}
   patchToday({kaga:r});
 };
 let nasalTmp={};
