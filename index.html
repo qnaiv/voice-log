@@ -17,7 +17,7 @@
 /* Layout: one narrow column like a practice notebook; summary band on top, numbered drill cards, bottom tab bar. */
 :root{
   --bg:#EDF1F0; --surface:#FFFFFF; --ink:#172524; --muted:#5C6C6A; --line:#D3DCDA;
-  --accent:#0E7C70; --accent-ink:#0A5F56; --accent-soft:#D6ECE8; --ochre:#B8661C; --ochre-ink:#7A4510; --ochre-soft:#F4E3D2;
+  --accent:#0E7C70; --accent-ink:#0A5F56; --brand:#0E7C70; --accent-soft:#D6ECE8; --ochre:#B8661C; --ochre-ink:#7A4510; --ochre-soft:#F4E3D2;
   --good:#2C8A4B; --warn:#A8701A; --bad:#B23A3A; --bad-soft:#F8E7E7; --bad-ink:#7E2626;
   --q-open:#F4E3D2; --q-mix:#F3E9E9; --q-ok:#E5EFEC; --q-closed:#E8ECF3;
   --f-body:"Zen Kaku Gothic New","Hiragino Sans","Noto Sans JP",system-ui,sans-serif;
@@ -28,12 +28,12 @@
   --bg:#0F1615; --surface:#172120; --ink:#E2EBE9; --muted:#93A4A1; --line:#2A3835;
   --accent:#46C2B2; --accent-ink:#7FD9CC; --accent-soft:#163A35; --ochre:#E39A55; --ochre-ink:#F0BC8A; --ochre-soft:#3A2A1B;
   --good:#5CC27E; --warn:#E0A84A; --bad:#E57373; --bad-soft:#3A1F1F; --bad-ink:#F2A9A9;
-  --q-open:#3A2A1B; --q-mix:#3A2626; --q-ok:#1D2D2A; --q-closed:#212A3A; color-scheme:dark}}
+  --q-open:#3A2A1B; --q-mix:#3A2626; --q-ok:#1D2D2A; --q-closed:#212A3A; --brand:#1E8F82; color-scheme:dark}}
 :root[data-theme="dark"]{
   --bg:#0F1615; --surface:#172120; --ink:#E2EBE9; --muted:#93A4A1; --line:#2A3835;
   --accent:#46C2B2; --accent-ink:#7FD9CC; --accent-soft:#163A35; --ochre:#E39A55; --ochre-ink:#F0BC8A; --ochre-soft:#3A2A1B;
   --good:#5CC27E; --warn:#E0A84A; --bad:#E57373; --bad-soft:#3A1F1F; --bad-ink:#F2A9A9;
-  --q-open:#3A2A1B; --q-mix:#3A2626; --q-ok:#1D2D2A; --q-closed:#212A3A; color-scheme:dark}
+  --q-open:#3A2A1B; --q-mix:#3A2626; --q-ok:#1D2D2A; --q-closed:#212A3A; --brand:#1E8F82; color-scheme:dark}
 :root{padding-top:env(safe-area-inset-top,0px)}
 [hidden]{display:none!important}
 *{box-sizing:border-box}
@@ -53,6 +53,9 @@ p{margin:0}
 .eyebrow{font-size:12px;font-weight:700;letter-spacing:.08em;color:var(--accent)}
 .card{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:16px;display:flex;flex-direction:column;gap:12px}
 header.top{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}
+.brand{display:flex;align-items:center;gap:9px}
+.brand .mark{flex:none;width:30px;height:30px;border-radius:8px;background:var(--brand);display:flex;align-items:center;justify-content:center}
+.brand .mark svg{width:20px;height:20px;display:block}
 .typechip{font:inherit;font-size:12px;font-weight:700;padding:4px 10px;border-radius:999px;border:0;cursor:pointer;background:var(--ochre-soft);color:var(--ochre-ink)}
 .typechip.none{background:var(--line);color:var(--muted)}
 .typechip.ok{background:var(--accent-soft);color:var(--accent-ink)}
@@ -213,7 +216,7 @@ nav.tabbar button[aria-current="page"]{color:var(--accent);font-weight:700}
 
 <!-- ============ onboarding ============ -->
 <section class="view" id="v-onboard" hidden>
-  <header class="top"><h1>発声ログ</h1></header>
+  <header class="top"><h1 class="brand"><span class="mark" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M5 12h0M8.5 8.5v7M12 5v14M15.5 8.5v7M19 12h0" fill="none" stroke="#fff" stroke-width="2.4" stroke-linecap="round"/></svg></span>発声ログ</h1></header>
   <div style="display:flex;flex-direction:column;gap:8px">
     <h2 style="font-size:22px">まず、あなたの声のことを少しだけ教えてください</h2>
     <p class="muted small">このあと2分ほどの診断で、声のタイプに合わせた毎日の練習メニューを作ります。</p>
@@ -339,7 +342,7 @@ nav.tabbar button[aria-current="page"]{color:var(--accent);font-weight:700}
 
 <!-- ============ today ============ -->
 <section class="view" id="v-today" hidden>
-  <header class="top"><h1>発声ログ</h1><button class="typechip" id="typechip"></button></header>
+  <header class="top"><h1 class="brand"><span class="mark" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M5 12h0M8.5 8.5v7M12 5v14M15.5 8.5v7M19 12h0" fill="none" stroke="#fff" stroke-width="2.4" stroke-linecap="round"/></svg></span>発声ログ</h1><button class="typechip" id="typechip"></button></header>
   <section class="card summary" aria-label="今日のまとめ">
     <div class="ring">
       <svg viewBox="0 0 100 100" aria-hidden="true">
@@ -482,7 +485,7 @@ const keyOf=d=>d.toLocaleDateString('sv-SE');
 const todayKey=()=>keyOf(new Date());
 const VOWELS=[['a','あ'],['i','い'],['u','う'],['e','え'],['o','お']];
 const LEAK_T=1.0, BLOCK_T=4.0, REDIAG_DAYS=30, DX_V=2;
-const APP_VERSION='20261021-1039';
+const APP_VERSION='20261021-1047';
 const TYPE_LABEL={ok:'問題なし',open:'開鼻声タイプ',closed:'閉鼻声タイプ',mixed:'混合タイプ'};
 const TYPE_SHORT={ok:'問題なし',open:'開鼻声',closed:'閉鼻声',mixed:'混合'};
 const DRILL_NAME={breath:'ロングブレス',yawn:'あくび喉',kaga:'「カ・ガ」連打',nasal:'鼻つまみチェック',vowel:'母音マップ'};
