@@ -360,10 +360,10 @@ nav.tabbar button[aria-current="page"]{color:var(--accent);font-weight:700}
 
     <article class="drill" id="d-nasal" data-id="nasal">
       <div class="drill-head"><div class="step">4</div>
-        <div class="t"><h3>鼻つまみチェック <span class="badge" hidden></span></h3><p class="how">下の文を<b>普通に</b>1回、<b>鼻をつまんで</b>1回読みます。ナ行・マ行がない文なので、2回の音が近いほど息が鼻に抜けていません。</p></div>
+        <div class="t"><h3>鼻つまみチェック <span class="badge" hidden></span></h3><p class="how">下の文を<b>普通に → 鼻をつまんで → もう一度普通に</b>の順に3回読みます。ナ行・マ行がない文なので、鼻をつまんでも「読み直したときの違い」程度しか変わらなければ、息は鼻に抜けていません。</p></div>
         <span class="chip">未</span></div>
       <p class="sentence">アヒルがさわぐ　カラスがかえる</p>
-      <div class="row"><button class="rec" id="r-nasal1"><span class="dot"></span><span>① 普通に</span></button><button class="rec" id="r-nasal2"><span class="dot"></span><span>② 鼻をつまんで</span></button></div>
+      <div class="row"><button class="rec" id="r-nasal1"><span class="dot"></span><span>① 普通に</span></button><button class="rec" id="r-nasal2"><span class="dot"></span><span>② 鼻をつまんで</span></button><button class="rec" id="r-nasal3"><span class="dot"></span><span>③ もう一度普通に</span></button></div>
       <div class="row"><div class="meter"><i id="m-nasal"></i></div><span class="timer" id="t-nasal">4.0s</span></div>
       <div class="result" id="o-nasal" hidden></div>
     </article>
@@ -437,7 +437,7 @@ const keyOf=d=>d.toLocaleDateString('sv-SE');
 const todayKey=()=>keyOf(new Date());
 const VOWELS=[['a','あ'],['i','い'],['u','う'],['e','え'],['o','お']];
 const LEAK_T=1.0, BLOCK_T=4.0, REDIAG_DAYS=30, DX_V=2;
-const APP_VERSION='20261021-0948';
+const APP_VERSION='20261021-0956';
 const TYPE_LABEL={ok:'問題なし',open:'開鼻声タイプ',closed:'閉鼻声タイプ',mixed:'混合タイプ'};
 const TYPE_SHORT={ok:'問題なし',open:'開鼻声',closed:'閉鼻声',mixed:'混合'};
 const DRILL_NAME={breath:'ロングブレス',yawn:'あくび喉',kaga:'「カ・ガ」連打',nasal:'鼻つまみチェック',vowel:'母音マップ'};
@@ -917,19 +917,21 @@ $('r-kaga').onclick=async()=>{
 };
 let nasalTmp={};
 async function nasalRec(which){
-  const btn=$(which===1?'r-nasal1':'r-nasal2');
+  const btn=$('r-nasal'+which);
   const out=await capture(btn,{maxSec:4,countdown:true},$('m-nasal'),$('t-nasal'),'録音中'); $('t-nasal').textContent='4.0s';
   if(!out) return;
-  const sp=ltas(out.x,out.sr);
+  const sp=toneSpec(out.x,out.sr);
   if(!sp){showMsg('o-nasal','声が小さく解析できませんでした。もう一度どうぞ。');return;}
-  nasalTmp[which]=sp;
-  if(nasalTmp[1]&&nasalTmp[2]){
-    const diff=specDiff(nasalTmp[1],nasalTmp[2]);
-    patchToday({nasal:{diff:+diff.toFixed(2),score:Math.round(clamp(100-diff*15,0,100))}});
-    nasalTmp={};
-  }else showMsg('o-nasal',which===1?'次は鼻をつまんで②を録音してください。':'①（普通に）も録音してください。');
+  nasalTmp[which]=sp; btn.lastElementChild.textContent=['','① 普通に','② 鼻をつまんで','③ もう一度普通に'][which]+' ✓';
+  if(nasalTmp[1]&&nasalTmp[2]&&nasalTmp[3]){
+    /* same idea as the diagnosis: change from pinching, minus the change you get just by reading it again */
+    const pinch=(specDiff(nasalTmp[1],nasalTmp[2])+specDiff(nasalTmp[3],nasalTmp[2]))/2, again=specDiff(nasalTmp[1],nasalTmp[3]);
+    const diff=Math.max(0,pinch-again);
+    patchToday({nasal:{v:2,diff:+diff.toFixed(2),pinch:+pinch.toFixed(2),again:+again.toFixed(2),score:Math.round(clamp(100-diff*40,0,100))}});
+    nasalTmp={}; [1,2,3].forEach(n=>$('r-nasal'+n).lastElementChild.textContent=['','① 普通に','② 鼻をつまんで','③ もう一度普通に'][n]);
+  }else{const next=[1,2,3].find(n=>!nasalTmp[n]); showMsg('o-nasal',['','次は①普通に読んでください。','次は②鼻をつまんで読んでください。','最後に③もう一度普通に読んでください。'][next]);}
 }
-$('r-nasal1').onclick=()=>nasalRec(1); $('r-nasal2').onclick=()=>nasalRec(2);
+$('r-nasal1').onclick=()=>nasalRec(1); $('r-nasal2').onclick=()=>nasalRec(2); $('r-nasal3').onclick=()=>nasalRec(3);
 const vb=$('vbtns');
 VOWELS.forEach(([k,kana])=>{const b=document.createElement('button'); b.id='v-'+k; b.textContent=kana; b.setAttribute('aria-label','「'+kana+'」を録音'); b.onclick=()=>vowelRec(k,b); vb.appendChild(b);});
 async function vowelRec(k,btn){
@@ -957,6 +959,11 @@ function kagaTip(r){
   return '速く・はっきり言えています。「ガ」でも同じペースで言えるか試してみましょう。';
 }
 function nasalTip(n){
+  if(n.v===2){
+    if(n.diff<=0.5) return '鼻をつまんでも、読み直したときの違い程度しか変わりません。息は鼻に抜けていません。';
+    if(n.diff<=1.0) return 'ほとんど抜けていません。この状態を保ちましょう。';
+    return '鼻をつまむと声が変わっています。あくび喉で喉の奥を持ち上げる感覚をつかんでから、もう一度測ってみましょう。';
+  }
   if(n.score<50) return '2回の音の差が大きく、鼻に息が抜けている可能性があります。あくび喉を多めにやってから再チェックしましょう。';
   if(n.score<75) return '少し鼻に抜けています。「カ・ガ」で喉の奥が持ち上がる感覚を意識してみましょう。';
   return '鼻をつまんでも音がほぼ変わりません。良い状態です。';
@@ -1002,7 +1009,7 @@ function renderToday(){
   if(d.breath){const o=$('o-breath'); o.hidden=false; o.innerHTML=metricHTML([[d.breath.sec+'<small>秒</small>','吐けた時間<br>目標 30秒'],[d.breath.stab+'<small>%</small>','息の安定度<br>目標 80%以上'],scoreCell(d.breath.score)])+'<p class="tip"></p>'; o.querySelector('.tip').textContent=breathTip(d.breath);}
   if(d.kaga){const o=$('o-kaga'); o.hidden=false; o.innerHTML=metricHTML([[d.kaga.rate+'<small>回/秒</small>','速さ<br>目標 毎秒6回'],[d.kaga.count+'<small>回</small>','言えた回数'],scoreCell(d.kaga.score)])+'<p class="tip"></p>'; o.querySelector('.tip').textContent=kagaTip(d.kaga);
     if(kagaViz){const v=document.createElement('div'); v.innerHTML=kagaSVG(kagaViz); o.insertBefore(v,o.querySelector('.tip'));}}
-  if(d.nasal){const o=$('o-nasal'); o.hidden=false; o.innerHTML=metricHTML([[d.nasal.diff+'<small>dB</small>','2回の音の差<br>小さいほど良い（2dB以下が目安）'],scoreCell(d.nasal.score),['','']])+'<p class="tip"></p>'; o.querySelector('.tip').textContent=nasalTip(d.nasal);}
+  if(d.nasal){const o=$('o-nasal'); o.hidden=false; o.innerHTML=(d.nasal.v===2?metricHTML([[d.nasal.diff+'<small>dB</small>','息の抜け<br>目安 1dB以下'],[d.nasal.pinch+'<small>dB</small>',`つまんだときの変化<br>読み直しの差 ${d.nasal.again}dB`],scoreCell(d.nasal.score)]):metricHTML([[d.nasal.diff+'<small>dB</small>','2回の音の差（旧方式）'],scoreCell(d.nasal.score),['','']]))+'<p class="tip"></p>'; o.querySelector('.tip').textContent=nasalTip(d.nasal);}
   VOWELS.forEach(([k])=>$('v-'+k).classList.toggle('got',!!(d.vowel&&d.vowel.v&&d.vowel.v[k])));
   if(d.vowel&&d.vowel.v){
     const o=$('o-vowel'); o.hidden=false; const v=d.vowel.v; const first=firstVowel();
