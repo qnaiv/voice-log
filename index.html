@@ -200,11 +200,15 @@ nav.tabbar button[aria-current="page"]{color:var(--accent);font-weight:700}
   </div>
   <div class="card">
     <h3>声の高さ</h3>
+    <p class="small muted">「測る」を押して、下の文をふだんの話し声で読んでください（4秒）。</p>
+    <p class="sentence">アヒルがさわぐ　カラスがかえる</p>
+    <div class="row"><button class="rec" id="ob-measure"><span class="dot"></span><span>測る</span></button><div class="meter"><i id="ob-m"></i></div><span class="timer" id="ob-t">4.0s</span></div>
+    <p class="tip" id="ob-f0" hidden></p>
     <div class="choice2" id="ob-pitch">
       <button class="opt center" data-v="low" aria-pressed="false">低め</button>
       <button class="opt center" data-v="high" aria-pressed="false">高め</button>
     </div>
-    <p class="small muted">母音マップの採点基準に使います。あとで変更できます。</p>
+    <p class="small muted">測ると自動で選ばれます。測れないときは手で選んでも大丈夫です。母音マップの採点基準に使います。</p>
   </div>
   <div class="card">
     <h3>練習の目的 <span class="small muted" style="font-weight:400">（複数選べます）</span></h3>
@@ -590,6 +594,26 @@ function analyzeKaga(x,sr){
   const rr=+rate.toFixed(1);
   return {count,rate:rr,score:Math.round(clamp(rr/6*100,0,100))};
 }
+/* median voice pitch (F0, Hz) with YIN over voiced frames */
+function pitchOf(x,sr){
+  const {y,sr:s}=decimate(x,sr,16000);
+  const N=Math.round(s*0.04), H=Math.round(s*0.01), tMin=Math.floor(s/400), tMax=Math.ceil(s/60);
+  const rms=[]; for(let i=0;i+N+tMax<=y.length;i+=H){let q=0; for(let j=0;j<N;j++) q+=y[i+j]*y[i+j]; rms.push(Math.sqrt(q/N));}
+  const mx=Math.max(...rms,0); if(mx<0.003) return null;
+  const f0s=[]; const d=new Float64Array(tMax+2);
+  rms.forEach((v,fi)=>{
+    if(v<mx*0.2) return; const st=fi*H;
+    for(let t=1;t<=tMax+1;t++){let q=0; for(let j=0;j<N;j++){const df=y[st+j]-y[st+j+t]; q+=df*df;} d[t]=q;}
+    let run=0, tau=-1;
+    for(let t=1;t<=tMax+1;t++){run+=d[t]; const c=d[t]*t/(run||1e-12); d[t]=c;}
+    for(let t=tMin;t<=tMax;t++){ if(d[t]<0.15){ while(t+1<=tMax&&d[t+1]<d[t]) t++; tau=t; break; } }
+    if(tau<0) return;
+    const a=d[tau-1],b=d[tau],c=d[tau+1]; const den=a-2*b+c; const sh=den?0.5*(a-c)/den:0;
+    f0s.push(s/(tau+sh));
+  });
+  if(f0s.length<8) return null;
+  f0s.sort((p,q)=>p-q); return Math.round(f0s[Math.floor(f0s.length/2)]);
+}
 function decimate(x,sr,target){const f=Math.max(1,Math.round(sr/target)); if(f===1) return {y:x,sr}; const n=Math.floor(x.length/f); const y=new Float32Array(n); for(let i=0;i<n;i++){let s=0; for(let j=0;j<f;j++) s+=x[i*f+j]; y[i]=s/f;} return {y,sr:sr/f};}
 function lpc(fr,p){const r=new Float64Array(p+1); for(let k=0;k<=p;k++){let s=0; for(let i=k;i<fr.length;i++) s+=fr[i]*fr[i-k]; r[k]=s;} if(r[0]<=0) return null; r[0]*=1.0001;
   const a=new Float64Array(p+1); a[0]=1; let e=r[0];
@@ -670,21 +694,32 @@ document.querySelectorAll('#tabbar button').forEach(b=>b.onclick=()=>go(b.datase
 document.querySelectorAll('[data-go]').forEach(b=>b.onclick=()=>go(b.dataset.go==='back'?backView:b.dataset.go));
 
 /* ---------- onboarding ---------- */
-let ob={pitch:null,goals:[]}, obEdit=false;
+let ob={pitch:null,goals:[],f0:null}, obEdit=false;
+const F0_SPLIT=165;
+const f0Text=f=>`平均 ${f} Hz で「${f<F0_SPLIT?'低め':'高め'}」でした（${F0_SPLIT} Hz 未満を低めとしています）。`;
 function renderOnboard(){
-  ob={pitch:S.settings.pitch||null,goals:[...(S.settings.goals||[])]};
+  ob={pitch:S.settings.pitch||null,goals:[...(S.settings.goals||[])],f0:S.settings.f0||null};
   $('ob-next').textContent=obEdit&&S.diags.length?'保存する':'診断をはじめる';
   paintOnboard();
 }
 function paintOnboard(){
   document.querySelectorAll('#ob-pitch .opt').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.v===ob.pitch)));
+  const fe=$('ob-f0'); fe.hidden=!ob.f0; if(ob.f0) fe.textContent=f0Text(ob.f0);
+  $('ob-measure').lastElementChild.textContent=ob.f0?'測り直す':'測る';
   document.querySelectorAll('#ob-goals .opt').forEach(b=>b.setAttribute('aria-pressed',String(ob.goals.includes(b.dataset.v))));
   const ok=ob.pitch&&ob.goals.length; $('ob-next').disabled=!ok; $('ob-hint').hidden=!!ok;
 }
 document.querySelectorAll('#ob-pitch .opt').forEach(b=>b.onclick=()=>{ob.pitch=b.dataset.v; paintOnboard();});
+$('ob-measure').onclick=async()=>{
+  const out=await capture($('ob-measure'),{maxSec:4,countdown:true},$('ob-m'),$('ob-t'),'録音中'); $('ob-t').textContent='4.0s';
+  if(!out) return;
+  const f=pitchOf(out.x,out.sr);
+  if(!f){const fe=$('ob-f0'); fe.hidden=false; fe.textContent='声の高さを読み取れませんでした。もう少し大きめの声で、もう一度どうぞ。'; return;}
+  ob.f0=f; ob.pitch=f<F0_SPLIT?'low':'high'; paintOnboard();
+};
 document.querySelectorAll('#ob-goals .opt').forEach(b=>b.onclick=()=>{const v=b.dataset.v; ob.goals=ob.goals.includes(v)?ob.goals.filter(x=>x!==v):[...ob.goals,v]; paintOnboard();});
 $('ob-next').onclick=()=>{
-  S.settings={...S.settings,pitch:ob.pitch,goals:ob.goals,onboarded:true}; saveSettings();
+  S.settings={...S.settings,pitch:ob.pitch,goals:ob.goals,f0:ob.f0,onboarded:true}; saveSettings();
   if(obEdit&&S.diags.length){obEdit=false; go('diag');} else {obEdit=false; backView='today'; go('intro');}
 };
 
@@ -991,9 +1026,9 @@ function renderDiag(){
   $('dg-run').onclick=()=>{dx={}; go('intro');};
   $('dg-chart').innerHTML=lineChart([{get:d=>d.leak,color:'var(--ochre)',w:3}],{rows:S.diags,yMax:Math.max(5,Math.ceil(Math.max(0,...S.diags.map(d=>d.leak)))),unit:'dB',ref:LEAK_T,empty:'診断すると、ここに息の抜けの推移が描かれます。'});
   $('dg-list').innerHTML=S.diags.length?S.diags.slice().reverse().map(d=>`<div class="dxrow"><span class="num small">${d.date.slice(5).replace('-','/')}</span><b style="font-size:14px">${TYPE_SHORT[d.type]}</b><span class="small muted">抜け${d.leak} ・ 通り${d.block}</span></div>`).join(''):'<p class="empty">履歴はまだありません。</p>';
-  $('dg-settings').textContent=`声の高さ：${S.settings.pitch==='high'?'高め':'低め'}　目的：${goals().map(g=>GOAL_NAME[g]).join('・')||'未設定'}`;
+  $('dg-settings').textContent=`声の高さ：${S.settings.pitch==='high'?'高め':'低め'}${S.settings.f0?`（${S.settings.f0} Hz）`:''}　目的：${goals().map(g=>GOAL_NAME[g]).join('・')||'未設定'}`;
 }
-$('dg-edit').onclick=()=>{obEdit=true; go('onboard');};
+$('dg-edit').textContent='声の高さ・目的を変更'; $('dg-edit').onclick=()=>{obEdit=true; go('onboard');};
 
 /* ---------- backup ---------- */
 $('bk-export').onclick=()=>{
