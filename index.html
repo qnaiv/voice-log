@@ -414,6 +414,7 @@ nav.tabbar button[aria-current="page"]{color:var(--accent);font-weight:700}
   <div class="card">
     <h2>設定</h2>
     <p class="small" id="dg-settings"></p>
+    <p class="small muted" id="dg-ver"></p>
     <div><button class="ghost" id="dg-edit">声の高さ・目的を変更</button></div>
   </div>
 </section>
@@ -435,6 +436,7 @@ const keyOf=d=>d.toLocaleDateString('sv-SE');
 const todayKey=()=>keyOf(new Date());
 const VOWELS=[['a','あ'],['i','い'],['u','う'],['e','え'],['o','お']];
 const LEAK_T=2.0, BLOCK_T=6.0, REDIAG_DAYS=30;
+const APP_VERSION='20261021-0920';
 const TYPE_LABEL={ok:'問題なし',open:'開鼻声タイプ',closed:'閉鼻声タイプ',mixed:'混合タイプ'};
 const TYPE_SHORT={ok:'問題なし',open:'開鼻声',closed:'閉鼻声',mixed:'混合'};
 const DRILL_NAME={breath:'ロングブレス',yawn:'あくび喉',kaga:'「カ・ガ」連打',nasal:'鼻つまみチェック',vowel:'母音マップ'};
@@ -1055,6 +1057,22 @@ $('bk-file').onchange=async()=>{
 };
 
 go(S.settings.onboarded?'today':'onboard');
+$('dg-ver').textContent='アプリのバージョン：'+APP_VERSION;
+
+/* ---------- self-update: GitHub Pages lets browsers keep an old copy for a while ---------- */
+async function checkUpdate(){
+  try{
+    const r=await fetch('version.json?t='+Date.now(),{cache:'no-store'}); if(!r.ok) return;
+    const {version}=await r.json(); if(!version||version===APP_VERSION) return;
+    let tried=null; try{tried=sessionStorage.getItem('voicelog.updTried');}catch(e){}
+    if(tried===version) return;                                   // avoid a reload loop
+    try{sessionStorage.setItem('voicelog.updTried',version);}catch(e){}
+    await Promise.all(['./','index.html'].map(u=>fetch(u,{cache:'reload'}).catch(()=>{})));
+    if(!active) location.reload();
+  }catch(e){}
+}
+checkUpdate();
+document.addEventListener('visibilitychange',()=>{if(!document.hidden) checkUpdate();});
 })();
 </script>
 </body>
