@@ -224,11 +224,14 @@ nav.tabbar button[aria-current="page"]{color:var(--accent);font-weight:700}
     <p class="sentence">アヒルがさわぐ　カラスがかえる</p>
     <div class="row"><button class="rec" id="ob-measure"><span class="dot"></span><span>測る</span></button><div class="meter"><i id="ob-m"></i></div><span class="timer" id="ob-t">4.0s</span></div>
     <p class="tip" id="ob-f0" hidden></p>
-    <div class="choice2" id="ob-pitch">
-      <button class="opt center" data-v="low" aria-pressed="false">低め</button>
-      <button class="opt center" data-v="high" aria-pressed="false">高め</button>
+    <div id="ob-pickwrap" hidden style="display:flex;flex-direction:column;gap:8px">
+      <p class="small" id="ob-pickmsg"></p>
+      <div class="choice2" id="ob-pitch">
+        <button class="opt center" data-v="low" aria-pressed="false">低め</button>
+        <button class="opt center" data-v="high" aria-pressed="false">高め</button>
+      </div>
     </div>
-    <p class="small muted">測ると自動で選ばれます。測れないときは手で選んでも大丈夫です。母音マップの採点基準に使います。</p>
+    <p class="small muted">母音マップの採点基準に使います。<button class="link" id="ob-manual" style="padding:0 2px;font-size:13px">うまく測れないときは手で選ぶ</button></p>
   </div>
   <div class="card">
     <h3>練習の目的 <span class="small muted" style="font-weight:400">（複数選べます）</span></h3>
@@ -478,7 +481,7 @@ const keyOf=d=>d.toLocaleDateString('sv-SE');
 const todayKey=()=>keyOf(new Date());
 const VOWELS=[['a','あ'],['i','い'],['u','う'],['e','え'],['o','お']];
 const LEAK_T=1.0, BLOCK_T=4.0, REDIAG_DAYS=30, DX_V=2;
-const APP_VERSION='20261021-1029';
+const APP_VERSION='20261021-1031';
 const TYPE_LABEL={ok:'問題なし',open:'開鼻声タイプ',closed:'閉鼻声タイプ',mixed:'混合タイプ'};
 const TYPE_SHORT={ok:'問題なし',open:'開鼻声',closed:'閉鼻声',mixed:'混合'};
 const DRILL_NAME={breath:'ロングブレス',yawn:'あくび喉',kaga:'「カ・ガ」連打',nasal:'鼻つまみチェック',vowel:'母音マップ'};
@@ -784,22 +787,29 @@ document.querySelectorAll('#tabbar button').forEach(b=>b.onclick=()=>go(b.datase
 document.querySelectorAll('[data-go]').forEach(b=>b.onclick=()=>go(b.dataset.go==='back'?backView:b.dataset.go));
 
 /* ---------- onboarding ---------- */
-let ob={pitch:null,goals:[],f0:null}, obEdit=false;
+let ob={pitch:null,goals:[],f0:null}, obEdit=false, obManual=false;
 const F0_SPLIT=165;
 const f0Text=f=>`平均 ${f} Hz で「${f<F0_SPLIT?'低め':'高め'}」でした（${F0_SPLIT} Hz 未満を低めとしています）。`;
 function renderOnboard(){
   ob={pitch:S.settings.pitch||null,goals:[...(S.settings.goals||[])],f0:S.settings.f0||null};
+  obManual=!!S.settings.pitch&&!S.settings.f0;   // chosen by hand earlier
   $('ob-next').textContent=obEdit&&S.diags.length?'保存する':'診断をはじめる';
   paintOnboard();
 }
 function paintOnboard(){
   document.querySelectorAll('#ob-pitch .opt').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.v===ob.pitch)));
   const fe=$('ob-f0'); fe.hidden=!ob.f0; if(ob.f0) fe.textContent=f0Text(ob.f0);
+  /* the low/high choice appears only after measuring (or when asked for), so the automatic pick is visible as a result */
+  const show=!!ob.f0||obManual; $('ob-pickwrap').hidden=!show; $('ob-manual').hidden=show;
+  const auto=ob.f0?(ob.f0<F0_SPLIT?'low':'high'):null;
+  $('ob-pickmsg').textContent=!ob.f0?'声の高さを選んでください。':ob.pitch===auto?'測った結果から自動で選びました。違うと思えば変えられます。':'測った結果とは違う方を選んでいます。';
   $('ob-measure').lastElementChild.textContent=ob.f0?'測り直す':'測る';
   document.querySelectorAll('#ob-goals .opt').forEach(b=>b.setAttribute('aria-pressed',String(ob.goals.includes(b.dataset.v))));
   const ok=ob.pitch&&ob.goals.length; $('ob-next').disabled=!ok; $('ob-hint').hidden=!!ok;
+  $('ob-hint').textContent=!ob.pitch&&!ob.goals.length?'声の高さを測って、目的を1つ以上選んでください':!ob.pitch?'声の高さを測ってください':'目的を1つ以上選んでください';
 }
 document.querySelectorAll('#ob-pitch .opt').forEach(b=>b.onclick=()=>{ob.pitch=b.dataset.v; paintOnboard();});
+$('ob-manual').onclick=()=>{obManual=true; paintOnboard();};
 $('ob-measure').onclick=async()=>{
   const out=await capture($('ob-measure'),{maxSec:4,countdown:true,clean:true},$('ob-m'),$('ob-t'),'録音中'); $('ob-t').textContent='4.0s';
   if(!out) return;
