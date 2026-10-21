@@ -436,7 +436,7 @@ const keyOf=d=>d.toLocaleDateString('sv-SE');
 const todayKey=()=>keyOf(new Date());
 const VOWELS=[['a','あ'],['i','い'],['u','う'],['e','え'],['o','お']];
 const LEAK_T=2.0, BLOCK_T=6.0, REDIAG_DAYS=30;
-const APP_VERSION='20261021-0929';
+const APP_VERSION='20261021-0939';
 const TYPE_LABEL={ok:'問題なし',open:'開鼻声タイプ',closed:'閉鼻声タイプ',mixed:'混合タイプ'};
 const TYPE_SHORT={ok:'問題なし',open:'開鼻声',closed:'閉鼻声',mixed:'混合'};
 const DRILL_NAME={breath:'ロングブレス',yawn:'あくび喉',kaga:'「カ・ガ」連打',nasal:'鼻つまみチェック',vowel:'母音マップ'};
@@ -479,10 +479,12 @@ function isDone(d,id){return id==='vowel'?!!(d.vowel&&d.vowel.area):!!d[id];}
 /* ---------- audio capture ---------- */
 let mode='mic', ctx=null, stream=null, active=null;
 function getCtx(){if(!ctx){const C=window.AudioContext||window.webkitAudioContext; ctx=new C();} if(ctx.state==='suspended') ctx.resume(); return ctx;}
-async function ensureMic(){
+async function ensureMic(clean){
   if(mode==='file') return false;
   if(stream) return true;
-  try{stream=await navigator.mediaDevices.getUserMedia({audio:{echoCancellation:false,noiseSuppression:false,autoGainControl:false}}); return true;}
+  try{/* clean: let the phone remove steady room noise. Fine for counting syllables or finding pitch,
+     but not for the breath hiss or spectrum comparisons, which need the raw sound. */
+  stream=await navigator.mediaDevices.getUserMedia({audio:{echoCancellation:!!clean,noiseSuppression:!!clean,autoGainControl:false}}); return true;}
   catch(e){mode='file'; const n=$('modeNotice'); n.hidden=false;
     n.textContent='マイクを使えないため、録音ファイルの読み込みで計測します。ボタンを押すと録音アプリかファイル選択が開きます。ブラウザの設定でマイクを許可すると直接録音できます。'; return false;}
 }
@@ -533,7 +535,7 @@ function recordFile(){
 async function capture(btn,opts,meterEl,timerEl,labelLive){
   if(active){active.stop();return null;}
   const label=btn.querySelector('span:last-child'); const orig=label?label.textContent:'';
-  const ok=await ensureMic();
+  const ok=await ensureMic(opts.clean);
   if(!ok){try{return await recordFile();}catch(e){return null;}}
   btn.classList.add('live'); if(label) label.textContent=labelLive||'止める';
   const out=await recordMic({...opts,onTick:(lv,sec,st)=>{meterEl&&(meterEl.style.width=(lv*100)+'%');
@@ -575,16 +577,31 @@ function analyzeKaga(x,sr,noiseAmp){
   const gate=Math.max(top-15,floor+10);               // a syllable must reach this level
   /* one "ka" often shows two humps: the k burst, then the vowel. They count as one syllable unless
      the sound really drops between them (a real gap between syllables is 15–40 dB; inside one is a few dB). */
+  const dipNeed=clamp((top-floor)*0.5,6,10);          // in a noisy room the gaps can't fall as far
   const pk=[]; let low=Infinity;
   for(let i=1;i<sm.length-1;i++){
     low=Math.min(low,sm[i]);
     if(!(sm[i]>=gate&&sm[i]>=sm[i-1]&&sm[i]>sm[i+1])) continue;
     if(!pk.length){ if(sm[i]-low>=4){pk.push(i); low=sm[i];} continue; }
     const last=pk[pk.length-1], dip=Math.min(sm[last],sm[i])-low;
-    if(dip>=10&&i-last>=6) pk.push(i);
+    if(dip>=dipNeed&&i-last>=6) pk.push(i);
     else if(sm[i]>sm[last]) pk[pk.length-1]=i;
     else continue;
     low=sm[i];
+  }
+  /* clean-up: drop humps far weaker than a typical "ka" (room noise, echo), then fold together
+     humps far closer than the usual spacing (two humps inside one slow "ka") */
+  if(pk.length>=3){
+    const hs=pk.map(p=>sm[p]).sort((a,b)=>a-b), mh=hs[Math.floor(hs.length*0.75)];
+    let q=pk.filter(p=>sm[p]>=mh-12);
+    if(q.length>=3){
+      const gs=[]; for(let k=1;k<q.length;k++) gs.push(q[k]-q[k-1]);
+      const mg=[...gs].sort((a,b)=>a-b)[Math.floor(gs.length/2)];
+      const out=[q[0]];
+      for(let k=1;k<q.length;k++){const l=out.length-1; if(q[k]-out[l]<mg*0.45){ if(sm[q[k]]>sm[out[l]]) out[l]=q[k]; } else out.push(q[k]);}
+      q=out;
+    }
+    pk.length=0; pk.push(...q);
   }
   if(pk.length<4) return null;
   const all=[]; for(let k=1;k<pk.length;k++) all.push((pk[k]-pk[k-1])*hop);
@@ -712,7 +729,7 @@ function paintOnboard(){
 }
 document.querySelectorAll('#ob-pitch .opt').forEach(b=>b.onclick=()=>{ob.pitch=b.dataset.v; paintOnboard();});
 $('ob-measure').onclick=async()=>{
-  const out=await capture($('ob-measure'),{maxSec:4,countdown:true},$('ob-m'),$('ob-t'),'録音中'); $('ob-t').textContent='4.0s';
+  const out=await capture($('ob-measure'),{maxSec:4,countdown:true,clean:true},$('ob-m'),$('ob-t'),'録音中'); $('ob-t').textContent='4.0s';
   if(!out) return;
   const f=pitchOf(out.x,out.sr);
   if(!f){const fe=$('ob-f0'); fe.hidden=false; fe.textContent='声の高さを読み取れませんでした。もう少し大きめの声で、もう一度どうぞ。'; return;}
@@ -854,7 +871,7 @@ $('r-yawn').onclick=()=>{
 };
 $('r-kaga').onclick=async()=>{
   const tEl=$('t-kaga');
-  const out=await capture($('r-kaga'),{maxSec:10.6,calib:0.6,tick:(lv,sec,st)=>{
+  const out=await capture($('r-kaga'),{maxSec:10.6,calib:0.6,clean:true,tick:(lv,sec,st)=>{
     tEl.textContent=st.phase==='calib'?'静かに…':(sec<1.1?'どうぞ':Math.max(0,10.6-sec).toFixed(1)+'s');
     tEl.style.color=st.phase==='calib'?'':'var(--accent)';
   }},$('m-kaga'),tEl,'止める');
